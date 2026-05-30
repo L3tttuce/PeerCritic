@@ -1,6 +1,7 @@
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import time
 from fastapi import Request
@@ -32,6 +33,36 @@ async def lifespan(app: FastAPI):
 
 # CORS configuration
 origins = ["http://localhost:3000", "http://169.254.244.127:3000"]
+
+
+# Configure logging
+logging.basicConfig(
+    filename="app.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Define logging middleware
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Log request details
+        client_ip = request.client.host
+        method = request.method
+        url = request.url.path
+
+        logger.info(f"Request: {method} {url} from {client_ip}")
+
+        # Process the request
+        response = await call_next(request)
+
+        # Log response details
+        status_code = response.status_code
+        logger.info(f"Response: {method} {url} returned {status_code} to {client_ip}")
+
+        return response
+
+
 
 # Create FastAPI application instance
 app = FastAPI(lifespan=lifespan)

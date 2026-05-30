@@ -212,3 +212,6 @@ __marimo__/
 /build
 
 /backup
+
+# App.log
+app.log

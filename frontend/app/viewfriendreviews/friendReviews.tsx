@@ -208,7 +208,7 @@ export default function FriendReviews({
         <div className="mt-8">
             <div className="bg-orange-300 justify-self-center w-90 border-orange-400 border-3 rounded-lg p-1">
                 <div className="text-xl font-bold justify-self-center mt-1">
-                    Your Friends&apos; Ratings
+                    Your Friends&apos; Reviews
                 </div>
             </div>
 

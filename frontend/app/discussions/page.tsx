@@ -25,11 +25,13 @@ import {Button} from "@/components/ui/button";
 import {RichTextEditor} from "@/components/ui/rich-text-editor";
 import {Input} from "@/components/ui/input";
 
+// Define type for user object 
 type User = {
   userId: number;
   username: string;
 }
 
+// Define type for profile object
 type Profile = {
   user: User;
   avatar: string;
@@ -37,7 +39,7 @@ type Profile = {
   lastname: string;
 }
 
-// Define TypeScript type for Search Threads object returned by API
+// Define type for Search Threads object returned by API
 type Thread = {
   threadId: number;
   profile: Profile;
@@ -46,16 +48,6 @@ type Thread = {
   threadContent: string;
   like: number;
 }
-
-// Define TypeScript type for Search Threads Page object returned by API
-type ThreadPage = {
-  items: Thread[];
-  total: number;
-  page: number;
-  size: number;
-  pages: number;
-}
-
 
 // Export the default page component rendered at the /threads route
 export default function Page() {
@@ -74,14 +66,16 @@ export default function Page() {
   // State to hold the thread content
   const [threadContent, setThreadContent] = useState("");
   
-  // State to hold the 
+  // State to hold the creating topic
   const [isCreatingTopic, setIsCreatingTopic] = useState(false);
-
+  
+  //
   const { push } = useRouter();
 
   // State to hold the user
   const [user, setUser] = useState<User | null>(null);
-
+  
+  // Triggers data fetching function on page load
   useEffect(() => {
     searchThreads();
     fetchUser();
@@ -140,7 +134,7 @@ export default function Page() {
   // Async function to create a Thread 
   async function createThread() {
     try {
-      // Send a GET resquest to the search threads endpoint using the id from the URL
+      // Send a GET request to the search threads endpoint using the id from the URL
       const response = await axios.post("http://localhost:8000/threads", {
         threadName,
         threadContent
@@ -159,7 +153,7 @@ export default function Page() {
     }
   }
   
-
+  
   return (
     <div className="mx-auto">
       <Navbar/>

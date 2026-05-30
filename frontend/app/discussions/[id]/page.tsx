@@ -62,16 +62,6 @@ type Thread = {
   like: number;
 }
 
-// Define TypeScript type for Get Posts Page object returned by API
-type PostPage = {
-  items: Post[];
-  total: number;
-  page: number;
-  size: number;
-  pages: number;
-}
-
-
 // Export the default page component rendered at the /posts/[id] route
 export default function Page() {
   const params = useParams();
@@ -148,7 +138,7 @@ export default function Page() {
       setCurrentPage(page);
     }
     try {
-      // Send a Get resquest to the Get Posts endpoint using the id from the URL
+      // Send a Get request to the Get Posts endpoint using the id from the URL
       const response = await axios.get("http://localhost:8000/threads/" + params.id + "/posts", {
         headers: {
           "Accept": 'application/json'
@@ -193,7 +183,7 @@ export default function Page() {
   }, []);
 
 
-  // Render the movie detail page UI
+  // Render the discussion forum page UI
   return (
     // Outer container
     <div className="mx-auto">

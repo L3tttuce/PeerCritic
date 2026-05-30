@@ -35,7 +35,7 @@ class ProfileUpdate(BaseTable):
     email: str | None
     avatar: str | None
     
-
+# Create data transfer object (DTO) to get profile for the discussion forum
 class ProfilePublic(BaseTable):
     user: UserPublic | None
     avatar: str | None
