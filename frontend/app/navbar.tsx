@@ -1,6 +1,6 @@
 "use client";
 
-import {Icon, Menu, User} from "lucide-react";
+import { Icon, Menu, User } from "lucide-react";
 
 import { Accordion, } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
@@ -13,9 +13,10 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
-import axios from 'axios';
-import {Popover, PopoverContent, PopoverTrigger} from "@/components/ui/popover";
-import {Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle} from "@/components/ui/item";
+import axios from "axios";
+import api from "@/app/apiClient";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -87,19 +88,19 @@ type Song = {
 export default function Navbar() {
   // State to hold the search open
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
-  
+
   // State to hold the search text
   const [searchText, setSearchText] = useState<string>("");
 
   // State to hold the fetched Search Movies 
   const [movies, setMovies] = useState<Movie[]>([]);
-  
+
   // State to hold the fetched Search Shows
   const [shows, setShows] = useState<Show[]>([]);
-  
+
   // State to hold the fetched Search Songs
   const [songs, setSongs] = useState<Song[]>([]);
-  
+
   // State to hold the user
   const [user, setUser] = useState<User | null>(null);
 
@@ -107,7 +108,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentUrl =
-  pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
+    pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
 
   useEffect(() => {
     fetchUser();
@@ -115,25 +116,20 @@ export default function Navbar() {
   // Get current logged in information
   async function fetchUser() {
     const token = localStorage.getItem("accessToken");
-    if (!token) {
+    const refreshToken = localStorage.getItem("refreshToken");
+
+    if (!token && !refreshToken) {
       setUser(null);
       return;
     }
 
     try {
-      const response = await axios.get("http://localhost:8000/current_user", {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      });
-      console.log(response);
+      const response = await api.get("/current_user");
       setUser(response.data);
     } catch (error: any) {
-      if (error?.response?.status === 401) {
-        localStorage.removeItem("accessToken");
-        setUser(null);
-        return;
-      }
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      setUser(null);
       console.error(error);
     }
   }
@@ -149,6 +145,7 @@ export default function Navbar() {
 
   function logout() {
     localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
     setUser(null);
   }
 
@@ -181,7 +178,7 @@ export default function Navbar() {
     }
   }
 
-// Async function to fetch Search Shows from API
+  // Async function to fetch Search Shows from API
   async function searchShows() {
     try {
       // Send a GET resquest to the search shows endpoint using the id from the URL
@@ -202,7 +199,7 @@ export default function Navbar() {
     }
   }
 
-// Async function to fetch Search Songs from API
+  // Async function to fetch Search Songs from API
   async function searchSongs() {
     try {
       // Send a GET resquest to the search songs endpoint using the id from the URL
@@ -221,7 +218,7 @@ export default function Navbar() {
     } catch (error) {
       console.error(error);
     }
-  }  
+  }
 
   return (
     <section>
@@ -255,15 +252,15 @@ export default function Navbar() {
 
             <Popover open={searchText.length > 0}>
               <PopoverTrigger asChild>
-                <Input className="bg-orange-800 text-white !placeholder-white w-100 rounded-full" 
-                       type="search" 
-                       placeholder="Search" value={searchText} onChange={e => setSearchText(e.target.value)}/>
+                <Input className="bg-orange-800 text-white !placeholder-white w-100 rounded-full"
+                  type="search"
+                  placeholder="Search" value={searchText} onChange={e => setSearchText(e.target.value)} />
               </PopoverTrigger>
-              <PopoverContent className="w-100 max-h-150 overflow-y-auto" 
-                              onOpenAutoFocus={(e) => e.preventDefault()}>
+              <PopoverContent className="w-100 max-h-150 overflow-y-auto"
+                onOpenAutoFocus={(e) => e.preventDefault()}>
                 {movies.map(movie => (
                   <Item key={movie.movieId}>
-                    
+
                     <ItemMedia variant="icon">
                       <img src={movie.cover} alt={movie.movieName} />
                     </ItemMedia>
@@ -307,9 +304,9 @@ export default function Navbar() {
                 ))}
               </PopoverContent>
             </Popover>
-            
-            
-            
+
+
+
           </div>
 
           {user != null
@@ -351,13 +348,13 @@ export default function Navbar() {
               <div className="flex gap-2">
                 <Button className="bg-orange-400 text-white" asChild variant="outline" size="sm">
                   <Link href={`/login?next=${encodeURIComponent(currentUrl)}`}>
-  LOGIN
-</Link>
+                    LOGIN
+                  </Link>
                 </Button>
                 <Button className="bg-orange-800 text-white" asChild size="sm">
                   <Link href={`/signup?next=${encodeURIComponent(currentUrl)}`}>
-  SIGNUP
-</Link>
+                    SIGNUP
+                  </Link>
                 </Button>
               </div>
             )}
@@ -410,13 +407,13 @@ export default function Navbar() {
                       <div className="flex flex-col gap-3">
                         <Button asChild variant="outline">
                           <Link href={`/login?next=${encodeURIComponent(currentUrl)}`}>
-  LOGIN
-</Link>
+                            LOGIN
+                          </Link>
                         </Button>
                         <Button asChild>
                           <Link href={`/signup?next=${encodeURIComponent(currentUrl)}`}>
-  SIGNUP
-</Link>
+                            SIGNUP
+                          </Link>
                         </Button>
                       </div>
                     )

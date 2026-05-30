@@ -41,3 +41,15 @@ export async function updateUserProfile(userId: number, payload: UserProfileUpda
     avatar: u.avatar ?? null,
   };
 }
+
+export async function generateRecoveryCode(): Promise<string> {
+  const res = await axios.post(
+    "http://localhost:8000/recovery-code",
+    {},
+    {
+      headers: authHeaders(),
+    }
+  );
+
+  return res.data.recovery_code;
+}

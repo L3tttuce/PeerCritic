@@ -1,15 +1,16 @@
 "use client"
 
 import Navbar from "@/app/navbar";
-import {useParams, useRouter} from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import axios from "axios";
-import {useEffect, useState} from "react";
-import {Badge} from "@/components/ui/badge";
-import {Star, ThumbsUp} from "lucide-react";
+import api from "@/app/apiClient";
+import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Star, ThumbsUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle} from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
-import {Table, TableBody, TableCell, TableRow} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import {
   Pagination,
   PaginationContent,
@@ -18,9 +19,9 @@ import {
   PaginationPrevious
 } from "@/components/ui/pagination";
 import React from "react";
-import {Label} from "@/components/ui/label";
-import {Input} from "@/components/ui/input";
-import {RichTextEditor} from "@/components/ui/rich-text-editor";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 type User = {
   userId: number;
@@ -44,7 +45,7 @@ type OriginalPost = {
 /* Define TypeScript type for a Post object returned by API */
 type Post = {
   postId: number;
-  profile: Profile; 
+  profile: Profile;
   postContent: string;
   timestamp: string;
   like: number;
@@ -75,49 +76,45 @@ export default function Page() {
 
   // State to hold the fetched Thread
   const [thread, setThread] = useState<Thread>();
-  
+
   const [postContent, setPostContent] = useState("");
-  
+
   const [isCreatingPost, setIsCreatingPost] = useState<number[]>([]);
-  
+
   const { push } = useRouter();
 
   // State to hold the user
   const [user, setUser] = useState<User | null>(null);
-  
-
-  // Triggers both data fetching function on page load
-  useEffect(() => {
-    fetchThread();               // Fetch movie
-    fetchPosts();
-    fetchUser();
-  }, []);
 
   // Get current logged in information
   async function fetchUser() {
     const token = localStorage.getItem("accessToken");
-    if (!token) {
+    const refreshToken = localStorage.getItem("refreshToken");
+
+    if (!token && !refreshToken) {
       setUser(null);
       return;
     }
 
     try {
-      const response = await axios.get("http://localhost:8000/current_user", {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      });
+      const response = await api.get("/current_user");
       console.log(response);
       setUser(response.data);
-    } catch (error: any) {
-      if (error?.response?.status === 401) {
-        localStorage.removeItem("accessToken");
-        setUser(null);
-        return;
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          localStorage.removeItem("accessToken");
+          localStorage.removeItem("refreshToken");
+          setUser(null);
+          return;
+        }
       }
+
       console.error(error);
     }
   }
+
+  // Async function to fetch thread from API
 
   // Async function to fetch thread from API
   async function fetchThread() {
@@ -164,14 +161,9 @@ export default function Page() {
   async function createPost(originalPostId: string | null = null) {
     try {
       // Send a GET resquest to the search threads endpoint using the id from the URL
-      const response = await axios.post("http://localhost:8000/threads/" + params.id + "/posts", {
+      const response = await api.post("/threads/" + params.id + "/posts", {
         postContent,
-        originalPostId
-      }, {
-        headers: {
-          Authorization: "Bearer " + localStorage.getItem("accessToken"),
-          Accept: "application/json",
-        },
+        originalPostId,
       });
       setIsCreatingPost([]);
       setPostContent("");
@@ -182,7 +174,14 @@ export default function Page() {
       console.error(error);
     }
   }
-  
+
+  // Triggers both data fetching function on page load
+  useEffect(() => {
+    fetchThread();               // Fetch movie
+    fetchPosts();
+    fetchUser();
+  }, []);
+
 
   // Render the discussion forum page UI
   return (
@@ -202,7 +201,7 @@ export default function Page() {
                   <div className="flex gap-5 bg-muted">
                     <Link href={"/threads/" + thread.threadId} className="h-20 w-20">
                       <img src={thread.profile.avatar} alt={thread.profile.user.username}
-                           className="h-full w-full object-cover"/>
+                        className="h-full w-full object-cover" />
                     </Link>
 
                     <div className="flex flex-col">
@@ -215,14 +214,14 @@ export default function Page() {
                   </div>
 
                   <div className="py-5 px-2 whitespace-normal ">
-                    <span dangerouslySetInnerHTML={{__html: thread.threadContent}}></span>
+                    <span dangerouslySetInnerHTML={{ __html: thread.threadContent }}></span>
                   </div>
 
                   <div className="flex items-center gap-2 p-2 border-t-1 border-gray-400">
-                    <ThumbsUp/> <span className="font-bold mr-3">{thread.like}</span>
+                    <ThumbsUp /> <span className="font-bold mr-3">{thread.like}</span>
                     {user != null && !isCreatingPost.includes(0) && (
                       <Button variant="secondary"
-                              onClick={e => setIsCreatingPost([0])}>
+                        onClick={e => setIsCreatingPost([0])}>
                         Reply
                       </Button>
                     )}
@@ -232,16 +231,16 @@ export default function Page() {
                     <div className="flex items-center gap-2 p-2 border-t-1 border-gray-400">
                       <div className="flex flex-col gap-7">
                         <RichTextEditor className="bg-white"
-                                        value={postContent}
-                                        onChange={value => setPostContent(value)}/>
+                          value={postContent}
+                          onChange={value => setPostContent(value)} />
                         <div className="flex gap-5">
                           <Button className="bg-orange-400 hover:bg-orange-800 w-50"
-                                  disabled={!postContent}
-                                  onClick={e => createPost()}>
+                            disabled={!postContent}
+                            onClick={e => createPost()}>
                             Post Reply
                           </Button>
                           <Button variant="secondary" className="w-50"
-                                  onClick={e => setIsCreatingPost([])}>
+                            onClick={e => setIsCreatingPost([])}>
                             Cancel
                           </Button>
                         </div>
@@ -257,7 +256,7 @@ export default function Page() {
                     <div className="flex gap-5 bg-muted">
                       <Link href={"/threads/" + post.postId} className="h-20 w-20">
                         <img src={post.profile.avatar} alt={post.profile.user.username}
-                             className="h-full w-full object-cover"/>
+                          className="h-full w-full object-cover" />
                       </Link>
 
                       <div className="mx-2 w-full flex justify-between">
@@ -281,18 +280,18 @@ export default function Page() {
                           <span className="font-semibold mb-2">
                             @{post.originalPost.profile.user.username} said:
                           </span>
-                          <span dangerouslySetInnerHTML={{__html: post.originalPost.postContent}}></span>
+                          <span dangerouslySetInnerHTML={{ __html: post.originalPost.postContent }}></span>
                         </div>
                       )}
 
-                      <span dangerouslySetInnerHTML={{__html: post.postContent}}></span>
+                      <span dangerouslySetInnerHTML={{ __html: post.postContent }}></span>
                     </div>
 
                     <div className="flex items-center gap-2 p-2 border-t-1 border-gray-400">
-                      <ThumbsUp/> <span className="font-bold mr-3">{post.like}</span>
+                      <ThumbsUp /> <span className="font-bold mr-3">{post.like}</span>
                       {user != null && !isCreatingPost.includes(post.postId) && (
                         <Button variant="secondary"
-                                onClick={e => setIsCreatingPost([post.postId])}>
+                          onClick={e => setIsCreatingPost([post.postId])}>
                           Reply
                         </Button>
                       )}
@@ -302,16 +301,16 @@ export default function Page() {
                       <div className="flex items-center gap-2 p-2 border-t-1 border-gray-400">
                         <div className="flex flex-col gap-7">
                           <RichTextEditor className="bg-white"
-                                          value={postContent}
-                                          onChange={value => setPostContent(value)}/>
+                            value={postContent}
+                            onChange={value => setPostContent(value)} />
                           <div className="flex gap-5">
                             <Button className="bg-orange-400 hover:bg-orange-800 w-50"
-                                    disabled={!postContent}
-                                    onClick={e => createPost(String(post.postId))}>
+                              disabled={!postContent}
+                              onClick={e => createPost(String(post.postId))}>
                               Post Reply
                             </Button>
                             <Button variant="secondary" className="w-50"
-                                    onClick={e => setIsCreatingPost([])}>
+                              onClick={e => setIsCreatingPost([])}>
                               Cancel
                             </Button>
                           </div>
@@ -330,21 +329,21 @@ export default function Page() {
             <PaginationContent>
               <PaginationItem>
                 <PaginationPrevious href="#" aria-disabled={currentPage <= 1}
-                                    className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
-                                    onClick={() => fetchPosts(currentPage - 1)}/>
+                  className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                  onClick={() => fetchPosts(currentPage - 1)} />
               </PaginationItem>
-              {Array.from({length: totalPages}, (_, index) => index + 1).map(page => (
+              {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
                 <PaginationItem key={page}>
                   <PaginationLink href="#"
-                                  isActive={page === currentPage} onClick={() => fetchPosts(page)}>
+                    isActive={page === currentPage} onClick={() => fetchPosts(page)}>
                     {page}
                   </PaginationLink>
                 </PaginationItem>
               ))}
               <PaginationItem>
                 <PaginationNext href="#" aria-disabled={currentPage >= totalPages}
-                                className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
-                                onClick={() => fetchPosts(currentPage + 1)}/>
+                  className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+                  onClick={() => fetchPosts(currentPage + 1)} />
               </PaginationItem>
             </PaginationContent>
           </Pagination>

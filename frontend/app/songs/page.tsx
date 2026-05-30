@@ -3,6 +3,7 @@
 import Navbar from "@/app/navbar";
 import axios from "axios";
 import { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
@@ -75,17 +76,24 @@ type Genre = {
 
 // Export the default page component rendered at the /songs route
 export default function Page() {
+
+  const router = useRouter();
+
+  const searchParams = useSearchParams();
+
+  const pageFromUrl = Number(searchParams.get("page") ?? "1");
+
+  // State to hold the selected year
+  const [selectedYear, setSelectedYear] = useState<string>("");
+
   // State to hold the current page
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(pageFromUrl);
 
   // State to hold the total pages
   const [totalPages, setTotalPages] = useState<number>(1);
 
   // State to hold the search text
   const [searchText, setSearchText] = useState<string>("");
-
-  // State to hold the selected year
-  const [selectedYear, setSelectedYear] = useState<string>("");
 
   // State to hold the fetched Search Songs
   const [songs, setSongs] = useState<Song[]>([]);
@@ -140,6 +148,8 @@ export default function Page() {
       setCurrentPage(page);
     }
 
+    router.push(`/songs?page=${page}`, { scroll: false });
+
     try {
       setLoadingSongs(true);
 
@@ -149,7 +159,7 @@ export default function Page() {
         },
         params: {
           page: page,
-          size: 8,
+          size: 12,
           search_text: searchText !== "" ? searchText : undefined,
           search_year: selectedYear !== "" ? selectedYear : undefined,
           search_artist: selectedArtist !== "" ? selectedArtist : undefined,
@@ -164,11 +174,11 @@ export default function Page() {
     } finally {
       setLoadingSongs(false);
     }
-  }, [searchText, selectedYear, selectedArtist, selectedGenre]);
+  }, [searchText, selectedYear, selectedArtist, selectedGenre, router]);
 
   useEffect(() => {
-    searchSongs();
-  }, [searchSongs]);
+    searchSongs(pageFromUrl);
+  }, [searchSongs, pageFromUrl]);
 
   // Async function to fetch Get Artists from API
   async function getArtists() {
@@ -225,7 +235,7 @@ export default function Page() {
         transition={{ duration: 0.25, ease: "easeOut" }}
         className="m-5"
       >
-        <h1 className="text-4xl font-bold">Most Popular Songs</h1>
+        <h1 className="text-4xl font-bold">Songs</h1>
       </motion.div>
 
       <div className="border-3 border-orange-400 mx-40 my-10 p-3 rounded-xl">
@@ -379,8 +389,12 @@ export default function Page() {
               <div className="relative transition-transform duration-200 hover:scale-[1.03] hover:z-10">
                 <Card className="w-90 mt-3 justify-self-center bg-orange-200 border-orange-400 border-1 pt-0 overflow-hidden transition-all duration-200 hover:border-orange-500 hover:shadow-md">
                   <Link href={"/songs/" + song.songId} className="h-full w-full">
-                    <div className="w-full aspect-[2/3] overflow-hidden rounded-t-lg border-b border-orange-400">
-                      <img src={song.cover} alt={song.songName} className="h-full w-full object-cover"/>
+                    <div className="aspect-[2/3] w-full overflow-hidden bg-orange-300">
+                      <img
+                        src={song.cover}
+                        alt={song.songName}
+                        className="h-full w-full object-cover"
+                      />
                     </div>
                   </Link>
                   <CardHeader>
@@ -404,23 +418,44 @@ export default function Page() {
       <Pagination className="mt-15 mb-10">
         <PaginationContent>
           <PaginationItem>
-            <PaginationPrevious href="#" aria-disabled={currentPage <= 1}
+            <PaginationPrevious
+              href="#"
+              aria-disabled={currentPage <= 1}
               className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
-              onClick={() => searchSongs(currentPage - 1)} />
+              onClick={(e) => {
+                e.preventDefault();
+                if (currentPage > 1) {
+                  searchSongs(currentPage - 1);
+                }
+              }}
+            />
           </PaginationItem>
           {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
             <PaginationItem key={page}>
-              <PaginationLink href="#"
+              <PaginationLink
+                href="#"
                 isActive={page === currentPage}
-                onClick={() => searchSongs(page)}>
+                onClick={(e) => {
+                  e.preventDefault();
+                  searchSongs(page);
+                }}
+              >
                 {page}
               </PaginationLink>
             </PaginationItem>
           ))}
           <PaginationItem>
-            <PaginationNext href="#" aria-disabled={currentPage >= totalPages}
+            <PaginationNext
+              href="#"
+              aria-disabled={currentPage >= totalPages}
               className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
-              onClick={() => searchSongs(currentPage + 1)} />
+              onClick={(e) => {
+                e.preventDefault();
+                if (currentPage < totalPages) {
+                  searchSongs(currentPage + 1);
+                }
+              }}
+            />
           </PaginationItem>
         </PaginationContent>
       </Pagination>

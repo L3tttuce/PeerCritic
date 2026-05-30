@@ -84,8 +84,8 @@ export default function Home() {
   useEffect(() => {
     searchMovies();
   }, []);
-  
-  
+
+
   return (
     <div className="mx-auto">
       <Navbar />
@@ -132,15 +132,15 @@ export default function Home() {
                         transition={{ duration: 0.3, ease: "easeOut" }}
                       >
                         <Card className="py-0">
-  <CardContent className="relative flex h-130 items-center justify-center px-0 py-0">
-    {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img
-      className="w-full aspect-21/9"
-      src={movie.backDrop}
-      alt={movie.movieName}
-    />
+                          <CardContent className="relative flex h-130 items-center justify-center px-0 py-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              className="w-full aspect-21/9"
+                              src={movie.backDrop}
+                              alt={movie.movieName}
+                            />
 
-    <div className="absolute top-1/2 left-0 h-full w-200"></div>
+                            <div className="absolute top-1/2 left-0 h-full w-200"></div>
 
                             <Link
                               href={`/movies/${movie.movieId}`}
@@ -176,6 +176,21 @@ export default function Home() {
       </div>
 
       <HomePageMovies />
+
+      {/* Footer Logo + TMDB Disclaimer */}
+      <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/tmdb_logo.svg"
+          alt="tmdb Logo"
+          className="h-12 w-auto opacity-80"
+        />
+
+        <p className="text-sm text-gray-500 max-w-xl">
+          This website uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.
+        </p>
+      </div>
+
     </div>
   );
 }

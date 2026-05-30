@@ -20,6 +20,8 @@ export default function Page() {
   const { push } = useRouter();
   const searchParams = useSearchParams();
 
+  const [errorMessage, setErrorMessage] = useState("");
+
   const rawNext = searchParams.get("next");
   const next =
     rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
@@ -28,24 +30,34 @@ export default function Page() {
 
   // The login function runs when the login button is clicked
   async function login(e: React.MouseEvent<HTMLButtonElement>) {
-    setIsSubmitted(true);
     e.preventDefault();   // prevent the default browser behavior on button click
+    setIsSubmitted(true);
+    setErrorMessage("");
+
+    if (username.length <= 0 || password.length <= 0) {
+      return;
+    }
+
     try {
       //Send a POST request to the local backend login endpoint with username and password
       const response = await axios.post("http://localhost:8000/login", new URLSearchParams({
         username,
         password,
       }));
+
       // Log the server response data to the browser console for debugging
       console.log(response.data);
       // Store the access token in localStorage
       localStorage.setItem("accessToken", response.data.access_token);
+      localStorage.setItem("refreshToken", response.data.refresh_token);
       // Navigate the user to the home page when successful login
       push(next);
     } catch (error) {
       console.error(error);
+      setErrorMessage("Incorrect username or password.");
     }
   }
+
 
   // Return or render block to define the login page UI
   return (
@@ -68,7 +80,10 @@ export default function Page() {
                     className="border-gray-300"
                     type="username"
                     value={username}
-                    onChange={e => setUsername(e.target.value)}
+                    onChange={e => {
+                      setUsername(e.target.value);
+                      setErrorMessage("");
+                    }}
                     required
                   />
                   {isSubmitted && username.length <= 0 && (<FieldError>Username is required!</FieldError>)}
@@ -78,18 +93,29 @@ export default function Page() {
                 <Field>
                   <div className="flex items-center">
                     <FieldLabel htmlFor="password">Password</FieldLabel>
-                    {/*<a href="#" className="ml-auto inline-block text-sm underline-offset-4 hover:underline text-orange-400">*/}
-                    {/*  Forgot your password?*/}
-                    {/*</a>*/}
+                    <Link
+                      href="/forgotpassword"
+                      className="ml-auto inline-block text-sm underline-offset-4 hover:underline text-orange-400 font-bold"
+                    >
+                      Forgot your password?
+                    </Link>
                   </div>
                   <Input id="password"
                     className="border-gray-300"
                     type="password"
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    onChange={e => {
+                      setPassword(e.target.value);
+                      setErrorMessage("");
+                    }}
                     required
                   />
                   {isSubmitted && password.length <= 0 && (<FieldError>Password is required!</FieldError>)}
+                  {errorMessage && (
+                    <div className="animate-in fade-in slide-in-from-top-2 rounded-md border border-red-400 bg-red-100 px-4 py-3 text-sm text-red-700">
+                      {errorMessage}
+                    </div>
+                  )}
                 </Field>
 
                 {/* Action field contains the submit and cancel buttons and signup link*/}

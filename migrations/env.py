@@ -9,6 +9,28 @@ from sqlmodel import SQLModel
 
 from model.BaseTable import BaseTable
 
+from model.Actor import Actor
+from model.Artist import Artist
+from model.Director import Director
+from model.Episode import Episode
+from model.Friendship import Friendship
+from model.Genre import Genre
+from model.Messages import Message
+from model.Movie import Movie
+from model.MovieActor import MovieActor
+from model.MovieDirector import MovieDirector
+from model.MovieGenre import MovieGenre
+from model.MovieWriter import MovieWriter
+from model.Post import Post
+from model.Profile import Profile
+from model.Review import Review
+from model.Song import Song
+from model.SongArtist import SongArtist
+from model.SongGenre import SongGenre
+from model.Thread import Thread
+from model.User import User
+from model.Writer import Writer
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
@@ -23,7 +45,7 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 # target_metadata = None
-target_metadata = BaseTable.metadata
+target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

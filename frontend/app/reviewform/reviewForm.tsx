@@ -21,6 +21,8 @@ type ReviewFormProps = {
 // Define base API URL
 const API_BASE_URL = "http://localhost:8000";
 
+const MAX_REVIEW_CHARS = 1500;
+
 // Helper function to return the correct review submission endpoint
 function getEndpoint(mediaType: MediaType, mediaId: number) {
   if (mediaType === "song") {
@@ -55,6 +57,12 @@ export default function ReviewForm({
   const [sparkleKey, setSparkleKey] = useState(0);
 
   const [sparkleRating, setSparkleRating] = useState(0);
+
+  const reviewCharCount = review.length;
+
+  const isReviewTooLong = reviewCharCount > MAX_REVIEW_CHARS;
+
+  const reviewHasContent = review.trim().length > 0;
 
   function triggerSparkles(finalRating: number) {
     if (finalRating >= 4) {
@@ -107,6 +115,16 @@ export default function ReviewForm({
 
     if (rating < 0 || rating > 10) {
       setError("Please choose a rating from 0 to 10.");
+      return;
+    }
+
+    if (!reviewHasContent) {
+      setError("Review cannot be empty.");
+      return;
+    }
+
+    if (isReviewTooLong) {
+      setError(`Review must be ${MAX_REVIEW_CHARS} characters or fewer.`);
       return;
     }
 
@@ -325,12 +343,32 @@ export default function ReviewForm({
 
             {/* Review text input */}
             <textarea
+              maxLength={MAX_REVIEW_CHARS}
+
               value={review}
-              onChange={(e) => setReview(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+
+                const cleaned = value
+                  // remove leading whitespace
+                  .replace(/^\s+/, "")
+                  // collapse multiple spaces
+                  .replace(/[ ]{2,}/g, " ")
+                  // collapse 3+ newlines into 2 (max one blank line)
+                  .replace(/\n{3,}/g, "\n\n");
+
+                setReview(cleaned);
+              }}
               rows={5}
               placeholder="Write your thoughts..."
               className="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-orange-400"
             />
+            <div
+              className={`mt-1 text-right text-xs ${isReviewTooLong ? "text-red-600" : "text-gray-500"
+                }`}
+            >
+              {reviewCharCount}/{MAX_REVIEW_CHARS} characters
+            </div>
           </div>
 
           {/* Error message */}
@@ -352,7 +390,7 @@ export default function ReviewForm({
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || isReviewTooLong || !reviewHasContent}
               className="rounded-lg bg-orange-400 px-4 py-2 text-sm font-medium text-white transition hover:bg-orange-500 disabled:opacity-60"
             >
               {submitting ? "Posting..." : "Post Review"}

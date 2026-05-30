@@ -59,7 +59,7 @@ export async function undoSentRequestApi(addresseeId: number) {
 
 // Returns users that match the search.
 export async function searchUsersByUsernameApi(username: string): Promise<Friend[]> {
-  const res = await axios.get(`${BASE_URL}/users/search/by-username`, {
+  const res = await axios.get(`${BASE_URL}/users/by-username/search`, {
     ...authHeaders(),
     params: { username },
   });

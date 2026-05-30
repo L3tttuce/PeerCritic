@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
+import time
+from fastapi import Request
 
 from model.database import create_db_and_tables
 from router import (
@@ -66,8 +67,17 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 # Create FastAPI application instance
 app = FastAPI(lifespan=lifespan)
 
-# Add middleware to the app
-app.add_middleware(LoggingMiddleware)
+@app.middleware("http")
+async def log_request_time(request: Request, call_next):
+    start_time = time.time()
+
+    response = await call_next(request)
+
+    process_time = time.time() - start_time
+    print(f"{request.method} {request.url.path} took {process_time:.4f}s")
+
+    return response
+
 
 # Add CORS Middleware
 app.add_middleware(

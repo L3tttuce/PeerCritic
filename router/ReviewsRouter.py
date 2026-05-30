@@ -11,12 +11,11 @@ from model.User import User
 from model.Friendship import Friendship
 from model.Movie import Movie
 from model.Song import Song
+from sqlalchemy import func
 
 from router.Authentication import get_current_user
 
-# Define API router for review-related endpoints under /my
 router = APIRouter(prefix="/my", tags=["reviews"])
-
 
 # Define response model for current user's reviews
 class MyReviewOut(BaseModel):
@@ -105,6 +104,35 @@ def get_accepted_friend_ids(current_user_id: int, session: SessionDep) -> set[in
 
     return friend_ids
 
+def update_movie_rating(session, movie_id: int):
+    result = session.exec(
+        select(func.avg(Review.review_rating), func.count(Review.review_id))
+        .where(Review.movie_id == movie_id)
+    ).first()
+
+    avg, count = result if result else (None, 0)
+
+    movie = session.get(Movie, movie_id)
+    if movie:
+        movie.movie_rating = round(float(avg), 1) if avg is not None else None
+        movie.movie_rating_count = count
+        session.add(movie)
+
+
+def update_song_rating(session, song_id: int):
+    result = session.exec(
+        select(func.avg(Review.review_rating), func.count(Review.review_id))
+        .where(Review.song_id == song_id)
+    ).first()
+
+    avg, count = result if result else (None, 0)
+
+    song = session.get(Song, song_id)
+    if song:
+        song.song_rating = round(float(avg), 1) if avg is not None else None
+        song.song_rating_count = count
+        session.add(song)
+
 
 # Get all reviews written by the current user
 @router.get("/reviews", response_model=list[MyReviewOut])
@@ -164,6 +192,8 @@ async def get_friend_reviews_for_movie(
     movie_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     session: SessionDep,
+    page: int = 1,
+    size: int = 8,
 ):
     friend_ids = get_accepted_friend_ids(current_user.user_id, session)
 
@@ -171,27 +201,31 @@ async def get_friend_reviews_for_movie(
         return []
 
     movie = session.exec(
-        select(Movie)
-        .where(Movie.movie_id == movie_id)
-        .options(
-            selectinload(Movie.reviews)
-            .selectinload(Review.user)
-            .selectinload(User.profile)
-        )
+        select(Movie).where(Movie.movie_id == movie_id)
     ).first()
 
     if not movie:
         raise HTTPException(status_code=404, detail="Movie not found")
 
-    # Filter only reviews written by accepted friends
-    friend_reviews = [
-        review
-        for review in movie.reviews
-        if review.user_id is not None and review.user_id in friend_ids
-    ]
+    stmt = (
+        select(Review)
+        .where(
+            Review.movie_id == movie_id,
+            Review.user_id.in_(friend_ids),
+        )
+        .options(
+            selectinload(Review.user).selectinload(User.profile)
+        )
+        .order_by(Review.review_id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+
+    reviews = session.exec(stmt).all()
 
     out: list[FriendReviewOut] = []
-    for review in sorted(friend_reviews, key=lambda r: r.review_id or 0, reverse=True):
+
+    for review in reviews:
         if review.user is None:
             continue
 
@@ -225,6 +259,8 @@ async def get_friend_reviews_for_song(
     song_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     session: SessionDep,
+    page: int = 1,
+    size: int = 8,
 ):
     friend_ids = get_accepted_friend_ids(current_user.user_id, session)
 
@@ -232,27 +268,31 @@ async def get_friend_reviews_for_song(
         return []
 
     song = session.exec(
-        select(Song)
-        .where(Song.song_id == song_id)
-        .options(
-            selectinload(Song.reviews)
-            .selectinload(Review.user)
-            .selectinload(User.profile)
-        )
+        select(Song).where(Song.song_id == song_id)
     ).first()
 
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
 
-    # Filter only reviews written by accepted friends
-    friend_reviews = [
-        review
-        for review in song.reviews
-        if review.user_id is not None and review.user_id in friend_ids
-    ]
+    stmt = (
+        select(Review)
+        .where(
+            Review.song_id == song_id,
+            Review.user_id.in_(friend_ids),
+        )
+        .options(
+            selectinload(Review.user).selectinload(User.profile)
+        )
+        .order_by(Review.review_id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+
+    reviews = session.exec(stmt).all()
 
     out: list[FriendReviewOut] = []
-    for review in sorted(friend_reviews, key=lambda r: r.review_id or 0, reverse=True):
+
+    for review in reviews:
         if review.user is None:
             continue
 
@@ -280,27 +320,36 @@ async def get_friend_reviews_for_song(
     return out
 
 
-# Get all public reviews for a movie
 @router.get("/media/reviews/movie/{movie_id}", response_model=list[MediaReviewOut])
 async def get_media_reviews_for_movie(
     movie_id: int,
     session: SessionDep,
+    page: int = 1,
+    size: int = 8,
 ):
     movie = session.exec(
-        select(Movie)
-        .where(Movie.movie_id == movie_id)
-        .options(
-            selectinload(Movie.reviews)
-            .selectinload(Review.user)
-            .selectinload(User.profile)
-        )
+        select(Movie).where(Movie.movie_id == movie_id)
     ).first()
 
     if not movie:
         raise HTTPException(status_code=404, detail="Movie not found")
 
+    stmt = (
+        select(Review)
+        .where(Review.movie_id == movie_id)
+        .options(
+            selectinload(Review.user).selectinload(User.profile)
+        )
+        .order_by(Review.review_id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+
+    reviews = session.exec(stmt).all()
+
     out: list[MediaReviewOut] = []
-    for review in sorted(movie.reviews, key=lambda r: r.review_id or 0, reverse=True):
+
+    for review in reviews:
         if review.user is None:
             continue
 
@@ -328,27 +377,36 @@ async def get_media_reviews_for_movie(
     return out
 
 
-# Get all public reviews for a song
 @router.get("/media/reviews/song/{song_id}", response_model=list[MediaReviewOut])
 async def get_media_reviews_for_song(
     song_id: int,
     session: SessionDep,
+    page: int = 1,
+    size: int = 8,
 ):
     song = session.exec(
-        select(Song)
-        .where(Song.song_id == song_id)
-        .options(
-            selectinload(Song.reviews)
-            .selectinload(Review.user)
-            .selectinload(User.profile)
-        )
+        select(Song).where(Song.song_id == song_id)
     ).first()
 
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
 
+    stmt = (
+        select(Review)
+        .where(Review.song_id == song_id)
+        .options(
+            selectinload(Review.user).selectinload(User.profile)
+        )
+        .order_by(Review.review_id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+
+    reviews = session.exec(stmt).all()
+
     out: list[MediaReviewOut] = []
-    for review in sorted(song.reviews, key=lambda r: r.review_id or 0, reverse=True):
+
+    for review in reviews:
         if review.user is None:
             continue
 
@@ -384,9 +442,7 @@ async def create_or_update_movie_review(
     current_user: Annotated[User, Depends(get_current_user)],
     session: SessionDep,
 ):
-    movie = session.exec(
-        select(Movie).where(Movie.movie_id == movie_id)
-    ).first()
+    movie = session.exec(select(Movie).where(Movie.movie_id == movie_id)).first()
 
     if not movie:
         raise HTTPException(status_code=404, detail="Movie not found")
@@ -405,6 +461,8 @@ async def create_or_update_movie_review(
         session.add(existing_review)
         session.commit()
         session.refresh(existing_review)
+        update_movie_rating(session, movie_id)
+        session.commit()
 
         return ReviewOut(
             reviewId=existing_review.review_id,
@@ -419,7 +477,7 @@ async def create_or_update_movie_review(
     new_review = Review(
         review=payload.review,
         review_rating=payload.reviewRating,
-        review_rating_count=movie.movie_rating_count,
+        review_rating_count=None,
         user_id=current_user.user_id,
         movie_id=movie_id,
         song_id=None,
@@ -428,6 +486,9 @@ async def create_or_update_movie_review(
     session.add(new_review)
     session.commit()
     session.refresh(new_review)
+
+    update_movie_rating(session, movie_id)
+    session.commit()
 
     return ReviewOut(
         reviewId=new_review.review_id,
@@ -447,9 +508,7 @@ async def create_or_update_song_review(
     current_user: Annotated[User, Depends(get_current_user)],
     session: SessionDep,
 ):
-    song = session.exec(
-        select(Song).where(Song.song_id == song_id)
-    ).first()
+    song = session.exec(select(Song).where(Song.song_id == song_id)).first()
 
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -468,6 +527,8 @@ async def create_or_update_song_review(
         session.add(existing_review)
         session.commit()
         session.refresh(existing_review)
+        update_song_rating(session, song_id)
+        session.commit()
 
         return ReviewOut(
             reviewId=existing_review.review_id,
@@ -482,7 +543,7 @@ async def create_or_update_song_review(
     new_review = Review(
         review=payload.review,
         review_rating=payload.reviewRating,
-        review_rating_count=song.song_rating_count,
+        review_rating_count=None,
         user_id=current_user.user_id,
         movie_id=None,
         song_id=song_id,
@@ -492,6 +553,9 @@ async def create_or_update_song_review(
     session.commit()
     session.refresh(new_review)
 
+    update_song_rating(session, song_id)
+    session.commit()
+
     return ReviewOut(
         reviewId=new_review.review_id,
         review=new_review.review,
@@ -500,6 +564,7 @@ async def create_or_update_song_review(
         movieId=None,
         songId=new_review.song_id,
     )
+
 
 @router.delete("/reviews/{review_id}")
 async def delete_my_review(

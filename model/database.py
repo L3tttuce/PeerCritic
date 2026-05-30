@@ -9,7 +9,11 @@ from sqlmodel import SQLModel, create_engine, Session
 # Load environment variable or secret from .env file
 load_dotenv()
 postgresql_url = os.getenv("DATABASE_URL")
-engine = create_engine(postgresql_url)
+engine = create_engine(
+    postgresql_url,
+    pool_size=10,
+    max_overflow=20,
+)
 
 # Create tables in the database
 def create_db_and_tables():

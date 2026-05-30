@@ -87,6 +87,27 @@ class Message(SQLModel, table=True):
     from_user_id: int = Field(foreign_key="user.user_id", index=True)
 
     message_text: str = Field(nullable=False, max_length=2000)
+
+    message_type: str = Field(default="text", index=True)
+
+    shared_review_id: Optional[int] = Field(
+        default=None,
+        foreign_key="review.review_id",
+        index=True,
+    )
+
+    shared_movie_id: Optional[int] = Field(
+        default=None,
+        foreign_key="movie.movie_id",
+        index=True,
+    )
+
+    shared_song_id: Optional[int] = Field(
+        default=None,
+        foreign_key="song.song_id",
+        index=True,
+    )
+
     sent_datetime: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc), index=True
     )

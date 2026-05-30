@@ -10,10 +10,13 @@ from model.User import User
 from model.Profile import Profile
 from router.Authentication import get_current_user
 
+
 def canonical_pair(a: int, b: int) -> tuple[int, int]:
     return (a, b) if a < b else (b, a)
 
+
 router = APIRouter(prefix="/my", tags=["friends"])
+
 
 @router.get("/friends")
 def my_friends(
@@ -31,7 +34,9 @@ def my_friends(
     friend_ids: list[int] = []
     for fr in friendships:
         friend_ids.append(
-            fr.addressee_id if fr.requester_id == current_user.user_id else fr.requester_id
+            fr.addressee_id
+            if fr.requester_id == current_user.user_id
+            else fr.requester_id
         )
 
     if not friend_ids:
@@ -121,7 +126,8 @@ def accept_friend_request(
             Friendship.user_low_id == low,
             Friendship.user_high_id == high,
             Friendship.status == "pending",
-            Friendship.addressee_id == current_user.user_id,  # addressee's approval is required
+            Friendship.addressee_id
+            == current_user.user_id,  # addressee's approval is required
         )
     ).first()
 
@@ -188,6 +194,7 @@ def remove_friend(
     session.delete(fr)
     session.commit()
     return {"ok": True}
+
 
 @router.get("/friend_requests/received")
 def friend_requests_received(
@@ -264,6 +271,7 @@ def friend_requests_sent(
     out.sort(key=lambda x: x["username"].lower())
     return out
 
+
 @router.delete("/friends/request/{addressee_id}")
 def cancel_friend_request(
     addressee_id: int,
@@ -292,3 +300,35 @@ def cancel_friend_request(
     session.delete(fr)
     session.commit()
     return {"ok": True}
+
+
+@router.get("/friends/status/{other_user_id}")
+def get_friend_status(
+    other_user_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: SessionDep,
+):
+    if other_user_id == current_user.user_id:
+        return {"status": "self"}
+
+    low, high = canonical_pair(current_user.user_id, other_user_id)
+
+    fr = session.exec(
+        select(Friendship).where(
+            Friendship.user_low_id == low,
+            Friendship.user_high_id == high,
+        )
+    ).first()
+
+    if not fr:
+        return {"status": "none"}
+
+    if fr.status == "accepted":
+        return {"status": "accepted"}
+
+    if fr.status == "pending":
+        if fr.requester_id == current_user.user_id:
+            return {"status": "pending_sent"}
+        return {"status": "pending_received"}
+
+    return {"status": fr.status}

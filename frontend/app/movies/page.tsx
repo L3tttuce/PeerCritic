@@ -1,7 +1,8 @@
 "use client"
 
 import Navbar from "@/app/navbar";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
@@ -58,8 +59,14 @@ type Genre = {
 
 // Export the default page component rendered at the /movies route
 export default function Page() {
+  const router = useRouter();
+
+  const searchParams = useSearchParams();
+
+  const pageFromUrl = Number(searchParams.get("page") ?? "1");
+
   // State to hold the current page
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [currentPage, setCurrentPage] = useState<number>(pageFromUrl);
 
   // State to hold the total pages
   const [totalPages, setTotalPages] = useState<number>(1);
@@ -143,40 +150,33 @@ export default function Page() {
     setSelectedGenre(genre);
   }
 
-  useEffect(() => {
-    if (selectedYear || selectedActor || selectedWriter || selectedDirector || selectedGenre || searchText) {
-      searchMovies();
-    } else if (searchText === "") {
-      searchMovies();
-    }
-  }, [searchText, selectedYear, selectedActor, selectedWriter, selectedDirector, selectedGenre]);
-
   // Async function to fetch Search Movies from API
-  async function searchMovies(page: number = 1) {
+  const searchMovies = useCallback(async (page: number = 1) => {
     if (page >= 1) {
       setCurrentPage(page);
     }
 
+    router.push(`/movies?page=${page}`, { scroll: false });
+
     try {
       setLoadingMovies(true);
-      // Send a GET resquest to the search movies endpoint using the id from the URL
+
       const response = await axios.get("http://localhost:8000/movies", {
         headers: {
-          "Accept": 'application/json'
+          Accept: "application/json",
         },
         params: {
-          page: page,      // Request the first page of result
-          size: 8,     // Limit results to 8 search movies
+          page,
+          size: 12,
           search_text: searchText !== "" ? searchText : undefined,
           search_year: selectedYear !== "" ? selectedYear : undefined,
           search_writer: selectedWriter !== "" ? selectedWriter : undefined,
           search_actor: selectedActor !== "" ? selectedActor : undefined,
           search_director: selectedDirector !== "" ? selectedDirector : undefined,
           search_genre: selectedGenre !== "" ? selectedGenre : undefined,
-        }
+        },
       });
 
-      // Get the item array from the Search Movies responses and store it in state
       setMovies(response.data.items as Movie[]);
       setTotalPages(response.data.pages);
     } catch (error) {
@@ -184,7 +184,15 @@ export default function Page() {
     } finally {
       setLoadingMovies(false);
     }
-  }
+  }, [
+    searchText,
+    selectedYear,
+    selectedWriter,
+    selectedActor,
+    selectedDirector,
+    selectedGenre,
+    router,
+  ]);
 
   // Async function to fetch Get Directors from API
   async function getDirectors() {
@@ -266,9 +274,12 @@ export default function Page() {
     }
   }
 
+  useEffect(() => {
+    searchMovies(pageFromUrl);
+  }, [searchMovies, pageFromUrl]);
+
   // Triggers data fetching function on page load
   useEffect(() => {
-    searchMovies();       // Fetch Search Movies
     getActors();          // Fetch Get Actors
     getDirectors();       // Fetch Get Directors
     getWriters();         // Fetch Get Writers
@@ -284,7 +295,7 @@ export default function Page() {
         transition={{ duration: 0.25, ease: "easeOut" }}
         className="m-5"
       >
-        <h1 className="text-4xl font-bold">Most Popular Movies</h1>
+        <h1 className="text-4xl font-bold">Movies</h1>
       </motion.div>
 
       <div className="border-3 border-orange-400 mx-40 my-10 p-3 rounded-xl">
@@ -461,8 +472,12 @@ export default function Page() {
               <div className="relative transition-transform duration-200 hover:scale-[1.03] hover:z-10">
                 <Card className="w-90 mt-3 justify-self-center bg-orange-200 border-orange-400 border-1 pt-0 overflow-hidden transition-all duration-200 hover:border-orange-500 hover:shadow-md">
                   <Link href={"/movies/" + movie.movieId} className="h-full w-full">
-                    <div className="w-full aspect-[2/3] overflow-hidden">
-                      <img src={movie.cover} alt={movie.movieName} className="h-full w-full object-cover"/>
+                    <div className="aspect-[2/3] w-full overflow-hidden bg-orange-300">
+                      <img
+                        src={movie.cover}
+                        alt={movie.movieName}
+                        className="h-full w-full object-cover"
+                      />
                     </div>
                   </Link>
                   <CardHeader>
@@ -486,22 +501,46 @@ export default function Page() {
       <Pagination className="mt-15 mb-10">
         <PaginationContent>
           <PaginationItem>
-            <PaginationPrevious href="#" aria-disabled={currentPage <= 1}
+            <PaginationPrevious
+              href="#"
+              aria-disabled={currentPage <= 1}
               className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
-              onClick={() => searchMovies(currentPage - 1)} />
+              onClick={(e) => {
+                e.preventDefault();
+                if (currentPage > 1) {
+                  searchMovies(currentPage - 1);
+                }
+              }}
+            />
           </PaginationItem>
-          {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
+
+          {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
             <PaginationItem key={page}>
-              <PaginationLink href="#"
-                isActive={page === currentPage} onClick={() => searchMovies(page)}>
+              <PaginationLink
+                href="#"
+                isActive={page === currentPage}
+                onClick={(e) => {
+                  e.preventDefault();
+                  searchMovies(page);
+                }}
+              >
                 {page}
               </PaginationLink>
             </PaginationItem>
           ))}
+
           <PaginationItem>
-            <PaginationNext href="#" aria-disabled={currentPage >= totalPages}
+            <PaginationNext
+              href="#"
+              aria-disabled={currentPage >= totalPages}
               className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
-              onClick={() => searchMovies(currentPage + 1)} />
+              onClick={(e) => {
+                e.preventDefault();
+                if (currentPage < totalPages) {
+                  searchMovies(currentPage + 1);
+                }
+              }}
+            />
           </PaginationItem>
         </PaginationContent>
       </Pagination>

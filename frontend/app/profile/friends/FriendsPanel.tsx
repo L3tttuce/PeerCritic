@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Check, X, RotateCcw, Plus, MoreVertical } from "lucide-react";
 import { createPortal } from "react-dom";
 import type { Friend, FriendsMode, FriendsTab } from "./types";
+import Link from "next/link";
 
 type Props = {
     // Data lists
@@ -244,7 +245,9 @@ export default function FriendsPanel({
                                                 </div>
 
                                                 <div className="min-w-0 flex-1">
-                                                    <div className="truncate text-sm font-medium leading-tight">{u.username}</div>
+                                                    <Link href={`/users/${u.userId}`} className="truncate text-sm font-medium hover:underline">
+                                                        {u.username}
+                                                    </Link>
                                                     <div className="truncate text-[11px] text-muted-foreground leading-tight">
                                                         {u.firstName} {u.lastName}
                                                     </div>
@@ -304,7 +307,9 @@ export default function FriendsPanel({
                                             </div>
 
                                             <div className="min-w-0 flex-1">
-                                                <div className="truncate text-sm font-medium leading-tight">{f.username}</div>
+                                                <Link href={`/users/${f.userId}`} className="truncate text-sm font-medium leading-tight hover:underline">
+                                                    {f.username}
+                                                </Link>
                                                 <div className="truncate text-[11px] text-muted-foreground leading-tight">
                                                     {f.firstName} {f.lastName}
                                                 </div>
