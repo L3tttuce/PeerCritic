@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import time
+from fastapi import Request
 
 from model.database import create_db_and_tables
 from router import (
@@ -33,6 +35,17 @@ origins = ["http://localhost:3000", "http://169.254.244.127:3000"]
 
 # Create FastAPI application instance
 app = FastAPI(lifespan=lifespan)
+
+@app.middleware("http")
+async def log_request_time(request: Request, call_next):
+    start_time = time.time()
+
+    response = await call_next(request)
+
+    process_time = time.time() - start_time
+    print(f"{request.method} {request.url.path} took {process_time:.4f}s")
+
+    return response
 
 
 # Add CORS Middleware

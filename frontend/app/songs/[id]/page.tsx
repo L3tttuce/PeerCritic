@@ -287,7 +287,7 @@ export default function Page() {
                     variant="ghost"
                     className="text-xl font-bold bg-orange-200 text-grey-500 p-7 rounded-t-xl rounded-b-none border-3 border-orange-300"
                   >
-                    Music Video
+                    Listen on Spotify
                   </Button>
                   <iframe
                     width="560"

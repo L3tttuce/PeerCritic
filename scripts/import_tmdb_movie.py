@@ -1,3 +1,5 @@
+# python scripts/import_tmdb_movie.py "Movie Title"
+
 import os
 import sys
 from datetime import datetime
