@@ -1,16 +1,18 @@
-from sqlmodel import SQLModel, Field, Relationship
+from typing import TYPE_CHECKING, Optional
+
+from sqlmodel import Field, Relationship
 
 from model.BaseTable import BaseTable
-from model.Movie import Movie
 
-# Create Episode database table
+if TYPE_CHECKING:
+    from model.TVShow import TVShow
+
+
 class Episode(BaseTable, table=True):
-    episode_id: int | None = Field(default=None, primary_key=True)      # Create id
-    episode_name: str                                                   # Required field
-    season: int | None = Field(nullable=True)                           # Optional field
-    episode_number: int | None = Field(nullable=True)                   # Optional field
-    
-    # Create foreign key
-    movie_id: int | None = Field(default=None, foreign_key="movie.movie_id")
-    # Create many-to-one relationship between Episode and Movie
-    movie: Movie | None = Relationship(back_populates="episodes")
+    episode_id: int | None = Field(default=None, primary_key=True)
+    episode_name: str
+    season: int | None = Field(nullable=True)
+    episode_number: int | None = Field(nullable=True)
+
+    show_id: int | None = Field(default=None, foreign_key="tvshow.show_id")
+    show: Optional["TVShow"] = Relationship(back_populates="episodes")

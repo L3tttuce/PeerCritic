@@ -11,6 +11,7 @@ from model.User import User
 from model.Friendship import Friendship
 from model.Movie import Movie
 from model.Song import Song
+from model.TVShow import TVShow
 from sqlalchemy import func
 
 from router.Authentication import get_current_user
@@ -28,6 +29,7 @@ class MyReviewOut(BaseModel):
     cover: Optional[str] = None
     movieId: Optional[int] = None
     songId: Optional[int] = None
+    showId: Optional[int] = None
 
 
 # Define response model for friend reviews
@@ -43,11 +45,12 @@ class FriendReviewOut(BaseModel):
     lastName: Optional[str] = None
     avatar: Optional[str] = None
 
-    kind: Literal["movie", "song"]
+    kind: Literal["movie", "song", "tv"]
     title: str
     cover: Optional[str] = None
     movieId: Optional[int] = None
     songId: Optional[int] = None
+    showId: Optional[int] = None
 
 
 # Define response model for all reviews on a media item
@@ -63,11 +66,12 @@ class MediaReviewOut(BaseModel):
     lastName: Optional[str] = None
     avatar: Optional[str] = None
 
-    kind: Literal["movie", "song"]
+    kind: Literal["movie", "song", "tv"]
     title: str
     cover: Optional[str] = None
     movieId: Optional[int] = None
     songId: Optional[int] = None
+    showId: Optional[int] = None
 
 
 # Define request model for creating or updating a review
@@ -84,6 +88,7 @@ class ReviewOut(BaseModel):
     reviewRatingCount: Optional[int]
     movieId: Optional[int] = None
     songId: Optional[int] = None
+    showId: Optional[int] = None
 
 
 # Helper function to get all accepted friend ids for the current user
@@ -119,6 +124,21 @@ def update_movie_rating(session, movie_id: int):
         session.add(movie)
 
 
+def update_show_rating(session, show_id: int):
+    result = session.exec(
+        select(func.avg(Review.review_rating), func.count(Review.review_id))
+        .where(Review.tvshow_id == show_id)
+    ).first()
+
+    avg, count = result if result else (None, 0)
+
+    show = session.get(TVShow, show_id)
+    if show:
+        show.show_rating = round(float(avg), 1) if avg is not None else None
+        show.show_rating_count = count
+        session.add(show)
+
+
 def update_song_rating(session, song_id: int):
     result = session.exec(
         select(func.avg(Review.review_rating), func.count(Review.review_id))
@@ -144,8 +164,9 @@ async def get_my_reviews(
         select(Review)
         .where(Review.user_id == current_user.user_id)
         .options(
-            selectinload(Review.movie).selectinload(Movie.episodes),
+            selectinload(Review.movie),
             selectinload(Review.song),
+            selectinload(Review.tvshow),
         )
         .order_by(Review.review_id.desc())
     )
@@ -154,18 +175,34 @@ async def get_my_reviews(
 
     out: list[MyReviewOut] = []
     for r in reviews:
-        if r.movie_id is not None and r.movie is not None:
+        if r.tvshow_id is not None and r.tvshow is not None:
             out.append(
                 MyReviewOut(
                     reviewId=r.review_id,
                     review=r.review,
                     reviewRating=r.review_rating,
                     reviewRatingCount=r.review_rating_count,
-                    kind="tv" if r.movie.episodes else "movie",
+                    kind="tv",
+                    title=r.tvshow.show_name,
+                    cover=r.tvshow.cover,
+                    movieId=None,
+                    songId=None,
+                    showId=r.tvshow_id,
+                )
+            )
+        elif r.movie_id is not None and r.movie is not None:
+            out.append(
+                MyReviewOut(
+                    reviewId=r.review_id,
+                    review=r.review,
+                    reviewRating=r.review_rating,
+                    reviewRatingCount=r.review_rating_count,
+                    kind="movie",
                     title=r.movie.movie_name,
                     cover=r.movie.cover,
                     movieId=r.movie_id,
                     songId=None,
+                    showId=None,
                 )
             )
         elif r.song_id is not None and r.song is not None:
@@ -180,6 +217,7 @@ async def get_my_reviews(
                     cover=r.song.cover,
                     movieId=None,
                     songId=r.song_id,
+                    showId=None,
                 )
             )
 
@@ -320,6 +358,68 @@ async def get_friend_reviews_for_song(
     return out
 
 
+@router.get("/friends/reviews/show/{show_id}", response_model=list[FriendReviewOut])
+async def get_friend_reviews_for_show(
+    show_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: SessionDep,
+    page: int = 1,
+    size: int = 8,
+):
+    friend_ids = get_accepted_friend_ids(current_user.user_id, session)
+
+    if not friend_ids:
+        return []
+
+    show = session.exec(select(TVShow).where(TVShow.show_id == show_id)).first()
+
+    if not show:
+        raise HTTPException(status_code=404, detail="TV show not found")
+
+    stmt = (
+        select(Review)
+        .where(
+            Review.tvshow_id == show_id,
+            Review.user_id.in_(friend_ids),
+        )
+        .options(selectinload(Review.user).selectinload(User.profile))
+        .order_by(Review.review_id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+
+    reviews = session.exec(stmt).all()
+    out: list[FriendReviewOut] = []
+
+    for review in reviews:
+        if review.user is None:
+            continue
+
+        profile = review.user.profile
+
+        out.append(
+            FriendReviewOut(
+                reviewId=review.review_id,
+                review=review.review,
+                reviewRating=review.review_rating,
+                reviewRatingCount=review.review_rating_count,
+                userId=review.user.user_id,
+                username=review.user.username,
+                firstName=profile.first_name if profile else None,
+                lastName=profile.last_name if profile else None,
+                avatar=profile.avatar if profile else None,
+                kind="tv",
+                title=show.show_name,
+                cover=show.cover,
+                movieId=None,
+                songId=None,
+                showId=show.show_id,
+            )
+        )
+
+    return out
+
+
 @router.get("/media/reviews/movie/{movie_id}", response_model=list[MediaReviewOut])
 async def get_media_reviews_for_movie(
     movie_id: int,
@@ -434,6 +534,59 @@ async def get_media_reviews_for_song(
     return out
 
 
+@router.get("/media/reviews/show/{show_id}", response_model=list[MediaReviewOut])
+async def get_media_reviews_for_show(
+    show_id: int,
+    session: SessionDep,
+    page: int = 1,
+    size: int = 8,
+):
+    show = session.exec(select(TVShow).where(TVShow.show_id == show_id)).first()
+
+    if not show:
+        raise HTTPException(status_code=404, detail="TV show not found")
+
+    stmt = (
+        select(Review)
+        .where(Review.tvshow_id == show_id)
+        .options(selectinload(Review.user).selectinload(User.profile))
+        .order_by(Review.review_id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+
+    reviews = session.exec(stmt).all()
+    out: list[MediaReviewOut] = []
+
+    for review in reviews:
+        if review.user is None:
+            continue
+
+        profile = review.user.profile
+
+        out.append(
+            MediaReviewOut(
+                reviewId=review.review_id,
+                review=review.review,
+                reviewRating=review.review_rating,
+                reviewRatingCount=review.review_rating_count,
+                userId=review.user.user_id,
+                username=review.user.username,
+                firstName=profile.first_name if profile else None,
+                lastName=profile.last_name if profile else None,
+                avatar=profile.avatar if profile else None,
+                kind="tv",
+                title=show.show_name,
+                cover=show.cover,
+                movieId=None,
+                songId=None,
+                showId=show.show_id,
+            )
+        )
+
+    return out
+
+
 # Create a new review or update an existing review for a movie
 @router.post("/reviews/movie/{movie_id}", response_model=ReviewOut)
 async def create_or_update_movie_review(
@@ -497,6 +650,73 @@ async def create_or_update_movie_review(
         reviewRatingCount=new_review.review_rating_count,
         movieId=new_review.movie_id,
         songId=None,
+    )
+
+
+# Create a new review or update an existing review for a TV show
+@router.post("/reviews/show/{show_id}", response_model=ReviewOut)
+async def create_or_update_show_review(
+    show_id: int,
+    payload: ReviewCreateIn,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: SessionDep,
+):
+    show = session.exec(select(TVShow).where(TVShow.show_id == show_id)).first()
+
+    if not show:
+        raise HTTPException(status_code=404, detail="TV show not found")
+
+    existing_review = session.exec(
+        select(Review).where(
+            Review.user_id == current_user.user_id,
+            Review.tvshow_id == show_id,
+        )
+    ).first()
+
+    if existing_review:
+        existing_review.review = payload.review
+        existing_review.review_rating = payload.reviewRating
+        session.add(existing_review)
+        session.commit()
+        session.refresh(existing_review)
+        update_show_rating(session, show_id)
+        session.commit()
+
+        return ReviewOut(
+            reviewId=existing_review.review_id,
+            review=existing_review.review,
+            reviewRating=existing_review.review_rating,
+            reviewRatingCount=existing_review.review_rating_count,
+            movieId=None,
+            songId=None,
+            showId=existing_review.tvshow_id,
+        )
+
+    new_review = Review(
+        review=payload.review,
+        review_rating=payload.reviewRating,
+        review_rating_count=None,
+        user_id=current_user.user_id,
+        movie_id=None,
+        song_id=None,
+        tvshow_id=show_id,
+    )
+
+    session.add(new_review)
+    session.commit()
+    session.refresh(new_review)
+
+    update_show_rating(session, show_id)
+    session.commit()
+
+    return ReviewOut(
+        reviewId=new_review.review_id,
+        review=new_review.review,
+        reviewRating=new_review.review_rating,
+        reviewRatingCount=new_review.review_rating_count,
+        movieId=None,
+        songId=None,
+        showId=new_review.tvshow_id,
     )
 
 
@@ -582,7 +802,21 @@ async def delete_my_review(
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
 
+    movie_id = review.movie_id
+    song_id = review.song_id
+    show_id = review.tvshow_id
+
     session.delete(review)
     session.commit()
+
+    if movie_id is not None:
+        update_movie_rating(session, movie_id)
+        session.commit()
+    elif song_id is not None:
+        update_song_rating(session, song_id)
+        session.commit()
+    elif show_id is not None:
+        update_show_rating(session, show_id)
+        session.commit()
 
     return {"message": "Review deleted"}

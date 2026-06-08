@@ -15,6 +15,7 @@ from model.Messages import Conversation, ConversationMember, Message
 from model.Review import Review
 from model.Movie import Movie
 from model.Song import Song
+from model.TVShow import TVShow
 from router.Authentication import get_current_user
 from ws_manager import manager
 
@@ -76,13 +77,29 @@ def build_shared_review(session: Session, review_id: int | None):
         select(Review)
         .where(Review.review_id == review_id)
         .options(
-            selectinload(Review.movie).selectinload(Movie.episodes),
+            selectinload(Review.movie),
             selectinload(Review.song),
+            selectinload(Review.tvshow),
         )
     ).first()
 
     if not review:
         return None
+
+    if review.tvshow_id is not None and review.tvshow is not None:
+        return {
+            "reviewId": review.review_id,
+            "review": review.review,
+            "reviewRating": review.review_rating,
+            "reviewRatingCount": review.review_rating_count,
+            "kind": "tv",
+            "title": review.tvshow.show_name,
+            "cover": review.tvshow.cover,
+            "year": review.tvshow.year,
+            "movieId": None,
+            "songId": None,
+            "showId": review.tvshow_id,
+        }
 
     if review.movie_id is not None and review.movie is not None:
         return {
@@ -90,12 +107,13 @@ def build_shared_review(session: Session, review_id: int | None):
             "review": review.review,
             "reviewRating": review.review_rating,
             "reviewRatingCount": review.review_rating_count,
-            "kind": "tv" if review.movie.episodes else "movie",
+            "kind": "movie",
             "title": review.movie.movie_name,
             "cover": review.movie.cover,
             "year": review.movie.year,
             "movieId": review.movie_id,
             "songId": None,
+            "showId": None,
         }
 
     if review.song_id is not None and review.song is not None:
@@ -110,6 +128,7 @@ def build_shared_review(session: Session, review_id: int | None):
             "year": review.song.year,
             "movieId": None,
             "songId": review.song_id,
+            "showId": None,
         }
 
     return None
@@ -119,19 +138,36 @@ def build_shared_media(
     session: Session,
     movie_id: int | None,
     song_id: int | None,
+    tvshow_id: int | None,
 ):
+    if tvshow_id is not None:
+        show = session.exec(
+            select(TVShow).where(TVShow.show_id == tvshow_id)
+        ).first()
+
+        if not show:
+            return None
+
+        return {
+            "kind": "tv",
+            "id": show.show_id,
+            "title": show.show_name,
+            "cover": show.cover,
+            "year": show.year,
+            "rating": show.show_rating,
+            "href": f"/tvshows/{show.show_id}",
+        }
+
     if movie_id is not None:
         movie = session.exec(
-            select(Movie)
-            .where(Movie.movie_id == movie_id)
-            .options(selectinload(Movie.episodes))
+            select(Movie).where(Movie.movie_id == movie_id)
         ).first()
 
         if not movie:
             return None
 
         return {
-            "kind": "tv" if movie.episodes else "movie",
+            "kind": "movie",
             "id": movie.movie_id,
             "title": movie.movie_name,
             "cover": movie.cover,
@@ -444,13 +480,16 @@ def list_messages(
             "sharedReviewId": m.shared_review_id,
             "sharedMovieId": m.shared_movie_id,
             "sharedSongId": m.shared_song_id,
+            "sharedTvshowId": m.shared_tvshow_id,
             "sharedReview": (
                 build_shared_review(session, m.shared_review_id)
                 if m.message_type == "review_share"
                 else None
             ),
             "sharedMedia": (
-                build_shared_media(session, m.shared_movie_id, m.shared_song_id)
+                build_shared_media(
+                    session, m.shared_movie_id, m.shared_song_id, m.shared_tvshow_id
+                )
                 if m.message_type == "media_share"
                 else None
             ),
@@ -474,6 +513,7 @@ async def send_message(
     shared_review_id = payload.get("sharedReviewId")
     shared_movie_id = payload.get("sharedMovieId")
     shared_song_id = payload.get("sharedSongId")
+    shared_tvshow_id = payload.get("sharedTvshowId")
 
     if message_type not in ["text", "review_share", "media_share"]:
         raise HTTPException(400, "Invalid messageType")
@@ -489,11 +529,18 @@ async def send_message(
             message_text = "Shared a review"
 
     if message_type == "media_share":
-        if shared_movie_id is None and shared_song_id is None:
-            raise HTTPException(400, "sharedMovieId or sharedSongId is required")
+        media_count = sum(
+            1
+            for value in (shared_movie_id, shared_song_id, shared_tvshow_id)
+            if value is not None
+        )
+        if media_count == 0:
+            raise HTTPException(
+                400, "sharedMovieId, sharedSongId, or sharedTvshowId is required"
+            )
 
-        if shared_movie_id is not None and shared_song_id is not None:
-            raise HTTPException(400, "Share either a movie or a song, not both")
+        if media_count > 1:
+            raise HTTPException(400, "Share one media item at a time")
 
         if not message_text:
             message_text = "Shared media"
@@ -527,6 +574,7 @@ async def send_message(
         shared_review_id=shared_review_id,
         shared_movie_id=shared_movie_id,
         shared_song_id=shared_song_id,
+        shared_tvshow_id=shared_tvshow_id,
         sent_datetime=now,
     )
 
@@ -573,13 +621,16 @@ async def send_message(
         "sharedReviewId": msg.shared_review_id,
         "sharedMovieId": msg.shared_movie_id,
         "sharedSongId": msg.shared_song_id,
+        "sharedTvshowId": msg.shared_tvshow_id,
         "sharedReview": (
             build_shared_review(session, msg.shared_review_id)
             if msg.message_type == "review_share"
             else None
         ),
         "sharedMedia": (
-            build_shared_media(session, msg.shared_movie_id, msg.shared_song_id)
+            build_shared_media(
+                session, msg.shared_movie_id, msg.shared_song_id, msg.shared_tvshow_id
+            )
             if msg.message_type == "media_share"
             else None
         ),

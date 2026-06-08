@@ -108,6 +108,12 @@ class Message(SQLModel, table=True):
         index=True,
     )
 
+    shared_tvshow_id: Optional[int] = Field(
+        default=None,
+        foreign_key="tvshow.show_id",
+        index=True,
+    )
+
     sent_datetime: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc), index=True
     )

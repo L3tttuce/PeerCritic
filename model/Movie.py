@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from model.Director import Director
     from model.Genre import Genre
     from model.Review import Review
-    from model.Episode import Episode, EpisodePublic
 
 
 # Create Movie database table
@@ -39,8 +38,6 @@ class Movie(BaseTable, table=True):
     directors: list["Director"] = Relationship(back_populates="movies", link_model=MovieDirector)
     # Create many-to-many relationship between Movie and Genre
     genres: list["Genre"] = Relationship(back_populates="movies", link_model=MovieGenre)
-    # Create one-to-many relationship between Movie and Episode
-    episodes: list["Episode"] = Relationship(back_populates="movie")
     # Create one-to-many relationship between Movie and Review
     reviews: list["Review"] = Relationship(back_populates="movie")
     

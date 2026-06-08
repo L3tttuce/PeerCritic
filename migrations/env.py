@@ -28,6 +28,11 @@ from model.Song import Song
 from model.SongArtist import SongArtist
 from model.SongGenre import SongGenre
 from model.Thread import Thread
+from model.TVShow import TVShow
+from model.TVShowActor import TVShowActor
+from model.TVShowDirector import TVShowDirector
+from model.TVShowGenre import TVShowGenre
+from model.TVShowWriter import TVShowWriter
 from model.User import User
 from model.Writer import Writer
 

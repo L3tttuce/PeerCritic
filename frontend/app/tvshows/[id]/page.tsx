@@ -16,20 +16,38 @@ import { Input } from "@/components/ui/input";
 import ReviewForm from "@/app/reviewform/reviewForm";
 import { AnimatePresence, motion } from "framer-motion";
 
-type Movie = {
-  movieId: number;
-  movieName: string;
+type Episode = {
+  episodeId: number;
+  episodeNumber: number;
+  episodeName: string;
+  season: number;
+  showId: number;
+}
+
+type Show = {
+  showId: number;
+  showName: string;
   description: string;
   year: number;
   length: string;
   cover: string;
   video: string;
-  movieRating: number;
-  movieRatingCount: number;
+  showRating: number;
+  showRatingCount: number;
   writers: string[];
   actors: string[];
   directors: string[];
   genres: string[];
+  episodes: Episode[];
+}
+
+type SimilarShow = {
+  showId: number;
+  showName: string;
+  year: number;
+  length: string;
+  cover: string;
+  showRating: number;
 }
 
 type Friend = {
@@ -60,10 +78,10 @@ export default function Page() {
 
   const [myReview, setMyReview] = useState<MyReview | null>(null);
   const isLoggedIn = typeof window !== "undefined" && !!localStorage.getItem("accessToken");
-  const [movie, setMovie] = useState<Movie>();
-  const [similarMovies, setSimilarMovies] = useState<Movie[]>([]);
+  const [show, setShow] = useState<Show>();
+  const [similarShows, setSimilarShows] = useState<SimilarShow[]>([]);
 
-  const movieId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const showId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [isReviewFormOpen, setIsReviewFormOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -71,17 +89,17 @@ export default function Page() {
   const [shareSuccess, setShareSuccess] = useState("");
 
   useEffect(() => {
-    if (!movieId) return;
+    if (!showId) return;
 
     let isCancelled = false;
 
-    async function loadMoviePage() {
+    async function loadShowPage() {
       try {
-        const [movieResponse, similarResponse, myReviewsResponse] = await Promise.all([
-          axios.get(`http://localhost:8000/movies/${movieId}`, {
+        const [showResponse, similarResponse, myReviewsResponse] = await Promise.all([
+          axios.get(`http://localhost:8000/shows/${showId}`, {
             headers: { Accept: "application/json" },
           }),
-          axios.get(`http://localhost:8000/movies/${movieId}/similar`, {
+          axios.get(`http://localhost:8000/shows/${showId}/similar`, {
             headers: { Accept: "application/json" },
             params: { page: 1, size: 20 },
           }),
@@ -90,11 +108,11 @@ export default function Page() {
 
         if (isCancelled) return;
 
-        setMovie(movieResponse.data);
-        setSimilarMovies(similarResponse?.data?.items ?? []);
+        setShow(showResponse.data);
+        setSimilarShows(similarResponse?.data?.items ?? []);
         const reviews = myReviewsResponse.data as MyReview[];
         const matchingReview = reviews.find(
-          (review) => review.movieId === Number(movieId)
+          (review) => review.showId === Number(showId)
         );
         setMyReview(matchingReview ?? null);
       } catch (error) {
@@ -104,12 +122,12 @@ export default function Page() {
       }
     }
 
-    void loadMoviePage();
+    void loadShowPage();
 
     return () => {
       isCancelled = true;
     };
-  }, [movieId]);
+  }, [showId]);
 
   function handleReviewClick() {
     const token = localStorage.getItem("accessToken");
@@ -126,7 +144,7 @@ export default function Page() {
     const token = localStorage.getItem("accessToken");
 
     if (!token) {
-      window.location.href = `/login?next=${encodeURIComponent(`/movies/${movieId}`)}`;
+      window.location.href = `/login?next=${encodeURIComponent(`/tvshows/${showId}`)}`;
       return;
     }
 
@@ -140,8 +158,8 @@ export default function Page() {
     }
   }
 
-  async function shareMovieToFriend(friendId: number) {
-    if (!movie) return;
+  async function shareShowToFriend(friendId: number) {
+    if (!show) return;
 
     try {
       const dmResponse = await api.post(`/messages/dm/${friendId}`, {});
@@ -150,9 +168,9 @@ export default function Page() {
       await api.post(`/messages/conversations/${conversationId}/messages`, {
         messageText: "Shared media",
         messageType: "media_share",
-        sharedMovieId: movie.movieId,
+        sharedMovieId: null,
         sharedSongId: null,
-        sharedTvshowId: null,
+        sharedTvshowId: show.showId,
       });
 
       setShareOpen(false);
@@ -172,15 +190,15 @@ export default function Page() {
     <div className="mx-auto pb-20">
       <Navbar />
       <div>
-        {movie !== undefined && (
+        {show !== undefined && (
           <>
             <div className="mt-6 flex w-full gap-8 px-8">
               <div className="grow-1">
                 <div className="flex flex-col items-center">
-                  <img src={movie.cover} alt={movie.movieName} width="300" height="400" />
+                  <img src={show.cover} alt={show.showName} width="300" height="400" />
 
                   <div className="mt-2">
-                    {movie.genres.map((genre, index) => (
+                    {show.genres.map((genre, index) => (
                       <Badge key={index} className="mr-1 rounded-sm">{genre}</Badge>
                     ))}
                   </div>
@@ -188,38 +206,68 @@ export default function Page() {
                   <div className="bg-orange-300 w-90 border-orange-400 border-3 rounded-lg mt-2 p-3">
                     <div>
                       <strong>Directors: </strong>
-                      {movie.directors.join(", ")}
+                      {show.directors.join(", ")}
                     </div>
                     <div>
                       <strong>Writers: </strong>
-                      {movie.writers.join(", ")}
+                      {show.writers.join(", ")}
                     </div>
                     <div>
                       <strong>Actors: </strong>
-                      {movie.actors.join(", ")}
+                      {show.actors.join(", ")}
                     </div>
                     <div>
                       <strong>Release Year: </strong>
-                      {movie.year}
+                      {show.year}
                     </div>
                     <div>
-                      <strong>Runtime: </strong>
-                      {movie.length}
+                      <strong>Episode Runtime: </strong>
+                      {show.length}
+                    </div>
+                    <div>
+                      <strong>Episodes: </strong>
+                      {show.episodes.length}
+                    </div>
+                    <div>
+                      <strong>Seasons: </strong>
+                      {show.episodes.reduce((max, episode) => Math.max(max, episode.season), 1)}
                     </div>
                   </div>
                 </div>
 
+                <div className="mt-5 flex flex-col items-center">
+                  <div className="text-lg font-bold">Episodes</div>
+
+                  <div className="mt-2 max-h-56 w-90 overflow-y-auto rounded-lg border-2 border-orange-300 bg-orange-100 p-2">
+                    {show.episodes.map((episode) => (
+                      <div
+                        key={episode.episodeId}
+                        className="mb-1 rounded-md border border-orange-300 bg-orange-200 px-2 py-1 text-sm"
+                      >
+                        <div className="flex justify-between gap-2">
+                          <span className="font-bold">
+                            S{episode.season} E{episode.episodeNumber}
+                          </span>
+                          <span className="truncate text-right">
+                            {episode.episodeName}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="mt-5">
-                  <FriendReviews mediaType="movie" mediaId={movie.movieId} />
+                  <FriendReviews mediaType="show" mediaId={show.showId} />
                 </div>
               </div>
 
               <div className="grow-1">
-                <h1 className="text-4xl font-bold justify-self-center">{movie.movieName}</h1>
+                <h1 className="text-4xl font-bold justify-self-center">{show.showName}</h1>
 
                 <div className="mt-5 flex items-center justify-center">
                   <Star className="mr-5" fill="#F3B413" color="#F3B413" size={100} />
-                  <div className="text-7xl font-bold text-blue-700">{movie.movieRating}</div>
+                  <div className="text-7xl font-bold text-blue-700">{show.showRating}</div>
                 </div>
 
                 <div className="flex font-bold text-xl justify-self-center border-orange-300 border-3 p-2 rounded-lg mt-8">
@@ -265,8 +313,8 @@ export default function Page() {
                   <iframe
                     width="560"
                     height="315"
-                    src={movie.video}
-                    title={movie.movieName}
+                    src={show.video}
+                    title={show.showName}
                     frameBorder="0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
@@ -275,7 +323,7 @@ export default function Page() {
 
                 <div className="mt-6 flex justify-center">
                   <div className="w-full max-w-xl">
-                    <MediaReviews mediaType="movie" mediaId={movie.movieId} />
+                    <MediaReviews mediaType="show" mediaId={show.showId} />
                   </div>
                 </div>
               </div>
@@ -283,39 +331,39 @@ export default function Page() {
               <div className="grow-1 overflow-x-clip">
                 <div className="text-lg font-bold justify-self-center">Summary</div>
                 <div className="w-100 justify-self-center border-3 border-orange-300 p-3 rounded-lg font-semibold">
-                  {movie.description}
+                  {show.description}
                 </div>
 
                 <div className="text-lg font-bold justify-self-center mt-5">
-                  Similar Movies
+                  Similar TV Shows
                 </div>
 
                 <div className="mt-2 h-[740px] space-y-2 overflow-y-auto pr-2 snap-y snap-mandatory scroll-smooth">
-                  {similarMovies.map((similarMovie) => (
+                  {similarShows.map((similarShow) => (
                     <div
-                      key={similarMovie.movieId}
+                      key={similarShow.showId}
                       className="relative h-[140px] snap-start snap-always origin-right transition-transform duration-200 hover:-translate-x-2 hover:z-10"
                     >
-                      <Link href={"/movies/" + similarMovie.movieId} className="block h-full">
+                      <Link href={"/tvshows/" + similarShow.showId} className="block h-full">
                         <Card className="h-full w-90 justify-self-center border border-orange-400 bg-orange-200 shadow-sm transition-all duration-200 hover:border-orange-500 hover:shadow-lg">
                           <CardHeader>
                             <CardTitle className="line-clamp-1 transition-colors hover:text-orange-700">
-                              {similarMovie.movieName}
+                              {similarShow.showName}
                             </CardTitle>
 
                             <CardDescription className="flex items-center gap-3 flex-wrap">
-                              <div>{similarMovie.year}</div>
-                              <div>{similarMovie.length}</div>
+                              <div>{similarShow.year}</div>
+                              <div>{similarShow.length}</div>
                               <div className="flex items-center gap-1">
                                 <Star className="h-4 w-4" fill="#F3B413" color="#F3B413" />
-                                <div className="font-bold">{similarMovie.movieRating}</div>
+                                <div className="font-bold">{similarShow.showRating}</div>
                               </div>
                             </CardDescription>
 
                             <CardAction>
                               <img
-                                src={similarMovie.cover}
-                                alt={similarMovie.movieName}
+                                src={similarShow.cover}
+                                alt={similarShow.showName}
                                 width="60"
                                 height="40"
                                 className="rounded-md border border-orange-300 object-cover"
@@ -331,9 +379,9 @@ export default function Page() {
             </div>
 
             <ReviewForm
-              mediaType="movie"
-              mediaId={movie.movieId}
-              mediaTitle={movie.movieName}
+              mediaType="show"
+              mediaId={show.showId}
+              mediaTitle={show.showName}
               open={isReviewFormOpen}
               onClose={() => setIsReviewFormOpen(false)}
               onSuccess={() => window.location.reload()}
@@ -370,7 +418,7 @@ export default function Page() {
                         <button
                           key={f.userId}
                           type="button"
-                          onClick={() => shareMovieToFriend(f.userId)}
+                          onClick={() => shareShowToFriend(f.userId)}
                           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-orange-100"
                         >
                           <div className="h-9 w-9 overflow-hidden rounded-full border border-orange-200 bg-orange-100">

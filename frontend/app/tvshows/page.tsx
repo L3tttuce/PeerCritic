@@ -25,13 +25,13 @@ import {
 
 // Define TypeScript type for Search Shows object returned by API
 type Show = {
-  movieId: number;
-  movieName: string;
+  showId: number;
+  showName: string;
   year: number;
   length: string;
   cover: string;
-  movieRating: number;
-  movieRatingCount: number;
+  showRating: number;
+  showRatingCount: number;
 }
 
 // Define TypeScript type for Get Directors object returned by API
@@ -264,7 +264,7 @@ export default function Page() {
   async function getGenres() {
     try {
       // Send a Get request to the Get Genres endpoint using the id from the URL
-      const response = await axios.get("http://localhost:8000/genres/movies", {
+      const response = await axios.get("http://localhost:8000/genres/shows", {
         headers: {
           "Accept": 'application/json'
         },
@@ -468,31 +468,31 @@ export default function Page() {
         ) : (
           shows.map((show, index) => (
             <motion.div
-              key={show.movieId}
+              key={show.showId}
               initial={{ opacity: 0, y: 10, scale: 0.985 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.22, ease: "easeOut", delay: index * 0.03 }}
             >
               <div className="relative transition-transform duration-200 hover:scale-[1.03] hover:z-10">
                 <Card className="w-90 mt-3 justify-self-center bg-orange-200 border-orange-400 border-1 pt-0 overflow-hidden transition-all duration-200 hover:border-orange-500 hover:shadow-md">
-                  <Link href={"/movies/" + show.movieId} className="h-full w-full">
+                  <Link href={"/tvshows/" + show.showId} className="h-full w-full">
                     <div className="aspect-[2/3] w-full overflow-hidden bg-orange-300">
                       <img
                         src={show.cover}
-                        alt={show.movieName}
+                        alt={show.showName}
                         className="h-full w-full object-cover"
                       />
                     </div>
                   </Link>
                   <CardHeader>
                     <CardTitle>
-                      <Link href={"/movies/" + show.movieId}>{show.movieName}</Link>
+                      <Link href={"/tvshows/" + show.showId}>{show.showName}</Link>
                     </CardTitle>
                     <CardDescription className="flex">
                       <div className="mr-9">{show.year}</div>
                       <div className="mr-9">{show.length}</div>
                       <Star className="mr-1" fill="#F3B413" color="#F3B413" />
-                      <div className="font-bold">{show.movieRating}</div>
+                      <div className="font-bold">{show.showRating}</div>
                     </CardDescription>
                   </CardHeader>
                 </Card>

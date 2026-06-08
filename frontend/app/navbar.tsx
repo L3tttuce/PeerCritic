@@ -65,13 +65,13 @@ type Movie = {
 
 // Define TypeScript type for Search Shows object returned by API
 type Show = {
-  movieId: number;
-  movieName: string;
+  showId: number;
+  showName: string;
   year: number;
   length: string;
   cover: string;
-  movieRating: number;
-  movieRatingCount: number;
+  showRating: number;
+  showRatingCount: number;
 }
 
 // Define TypeScript type for Search Songs object returned by API
@@ -274,14 +274,14 @@ export default function Navbar() {
                 ))}
 
                 {shows.map(show => (
-                  <Item key={show.movieId}>
+                  <Item key={show.showId}>
 
                     <ItemMedia variant="icon">
-                      <img src={show.cover} alt={show.movieName} />
+                      <img src={show.cover} alt={show.showName} />
                     </ItemMedia>
                     <ItemContent>
-                      <Link href={"/movies/" + show.movieId}>
-                        <ItemTitle>{show.movieName}</ItemTitle>
+                      <Link href={"/tvshows/" + show.showId}>
+                        <ItemTitle>{show.showName}</ItemTitle>
                         <ItemDescription>{show.year}</ItemDescription>
                       </Link>
                     </ItemContent>

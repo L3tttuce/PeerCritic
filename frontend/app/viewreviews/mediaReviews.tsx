@@ -49,6 +49,10 @@ function getEndpoint(mediaType: MediaType, mediaId: number) {
         return `${API_BASE_URL}/my/media/reviews/song/${mediaId}`;
     }
 
+    if (mediaType === "show") {
+        return `${API_BASE_URL}/my/media/reviews/show/${mediaId}`;
+    }
+
     return `${API_BASE_URL}/my/media/reviews/movie/${mediaId}`;
 }
 

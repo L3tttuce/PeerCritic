@@ -320,7 +320,13 @@ export default function ReviewsPanel() {
                       <div className="flex items-start gap-4">
                         {/*Cover*/}
                         <Link
-                          href={r.kind === "song" ? `/songs/${r.songId}` : `/movies/${r.movieId}`}
+                          href={
+                            r.kind === "song"
+                              ? `/songs/${r.songId}`
+                              : r.kind === "tv"
+                                ? `/tvshows/${r.showId}`
+                                : `/movies/${r.movieId}`
+                          }
                           className="h-14 w-14 shrink-0 overflow-hidden rounded-md border border-orange-200 bg-orange-100"
                         >
                           {r.cover ? (
@@ -343,7 +349,13 @@ export default function ReviewsPanel() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <Link
-                                href={r.kind === "song" ? `/songs/${r.songId}` : `/movies/${r.movieId}`}
+                                href={
+                            r.kind === "song"
+                              ? `/songs/${r.songId}`
+                              : r.kind === "tv"
+                                ? `/tvshows/${r.showId}`
+                                : `/movies/${r.movieId}`
+                          }
                                 className="block truncate font-medium text-gray-900 hover:underline"
                               >
                                 {r.title}

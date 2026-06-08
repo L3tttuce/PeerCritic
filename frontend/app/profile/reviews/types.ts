@@ -14,6 +14,7 @@ export interface Review {
 
   movieId: number | null;
   songId: number | null;
+  showId: number | null;
 }
 
 // Tabs in the review panel

@@ -69,6 +69,7 @@ type MsgRow = {
   sharedReview: SharedReview | null;
   sharedMovieId: number | null;
   sharedSongId: number | null;
+  sharedTvshowId: number | null;
   sharedMedia: SharedMedia | null;
   sentDatetime: string;
 };
@@ -84,6 +85,7 @@ type SharedReview = {
   year: number;
   movieId: number | null;
   songId: number | null;
+  showId: number | null;
 };
 
 type SharedMedia = {
@@ -113,7 +115,9 @@ function ReviewShareCard({ review }: { review: SharedReview }) {
   const href =
     review.kind === "song"
       ? `/songs/${review.songId}`
-      : `/movies/${review.movieId}`;
+      : review.kind === "tv"
+        ? `/tvshows/${review.showId}`
+        : `/movies/${review.movieId}`;
 
   const reviewText = review.review?.trim() || "No written review.";
 

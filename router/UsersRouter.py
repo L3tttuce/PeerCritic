@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from model.Review import Review
 from model.Movie import Movie
 from model.Song import Song
+from model.TVShow import TVShow
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from model.Friendship import Friendship
@@ -27,8 +28,9 @@ def get_user_reviews(
         select(Review)
         .where(Review.user_id == user_id)
         .options(
-            selectinload(Review.movie).selectinload(Movie.episodes),
+            selectinload(Review.movie),
             selectinload(Review.song),
+            selectinload(Review.tvshow),
         )
         .order_by(Review.review_id.desc())
     )
@@ -38,21 +40,36 @@ def get_user_reviews(
     out = []
 
     for r in reviews:
-        if r.movie_id is not None and r.movie is not None:
+        if r.tvshow_id is not None and r.tvshow is not None:
             out.append(
                 {
                     "reviewId": r.review_id,
                     "review": r.review,
                     "reviewRating": r.review_rating,
                     "reviewRatingCount": r.review_rating_count,
-                    "kind": "tv" if r.movie.episodes else "movie",
+                    "kind": "tv",
+                    "title": r.tvshow.show_name,
+                    "cover": r.tvshow.cover,
+                    "movieId": None,
+                    "songId": None,
+                    "showId": r.tvshow_id,
+                }
+            )
+        elif r.movie_id is not None and r.movie is not None:
+            out.append(
+                {
+                    "reviewId": r.review_id,
+                    "review": r.review,
+                    "reviewRating": r.review_rating,
+                    "reviewRatingCount": r.review_rating_count,
+                    "kind": "movie",
                     "title": r.movie.movie_name,
                     "cover": r.movie.cover,
                     "movieId": r.movie_id,
                     "songId": None,
+                    "showId": None,
                 }
             )
-
         elif r.song_id is not None and r.song is not None:
             out.append(
                 {
@@ -65,6 +82,7 @@ def get_user_reviews(
                     "cover": r.song.cover,
                     "movieId": None,
                     "songId": r.song_id,
+                    "showId": None,
                 }
             )
 

@@ -27,16 +27,7 @@ type Genre = {
   genreName: string;
 };
 
-// Define TypeScript type for Genre object returned by API
-type Episode = {
-  episodeId: number | null;
-  episodeName: string;
-  season: number | null;
-  episodeNumber: number | null;
-  movieId: number | null;
-};
-
-// Define TypeScript type for Episode object returned by API
+// Define TypeScript type for Movie card object returned by API
 type MovieCard = {
   movieId: number | null;
   movieName: string;
@@ -50,8 +41,16 @@ type MovieCard = {
 };
 
 // Define TypeScript type for TV Show card object returned by API
-type TVShowCard = MovieCard & {
-  episodes: Episode[];
+type TVShowCard = {
+  showId: number | null;
+  showName: string;
+  description: string | null;
+  year: number | null;
+  length: string | null;
+  cover: string | null;
+  backDrop: string | null;
+  showRating: number | null;
+  showRatingCount: number | null;
 };
 
 // Define TypeScript type for Song card object returned by API
@@ -112,21 +111,9 @@ async function fetchPage<T>(endpoint: string, params?: Record<string, string | n
   return response.data.items;
 }
 
-// Helper function to fetch paginated data from API
+// Helper function to derive display duration for TV show cards
 function getShowDuration(show: TVShowCard): string | undefined {
-  if (show.episodes.length === 0) {
-    return show.length ?? undefined;
-  }
-
-  const seasons = new Set(
-    show.episodes
-      .map((episode) => episode.season)
-      .filter((season): season is number => season !== null)
-  ).size;
-
-  return seasons > 0
-    ? `${seasons} Season${seasons > 1 ? "s" : ""}`
-    : `${show.episodes.length} Episode${show.episodes.length > 1 ? "s" : ""}`;
+  return show.length ?? undefined;
 }
 
 // Reusable component for a homepage media carousel section
@@ -396,15 +383,15 @@ const showSection: MediaSectionConfig<TVShowCard> = {
   title: "TV Shows",
   seeMoreHref: "/tvshows",
   itemsEndpoint: "/shows",
-  genresEndpoint: "/genres/movies",
+  genresEndpoint: "/genres/shows",
   mapItem: (show) => ({
-    id: show.movieId,
-    title: show.movieName,
+    id: show.showId,
+    title: show.showName,
     year: show.year ?? undefined,
     duration: getShowDuration(show),
     cover: show.cover ?? "/placeholder.png",
-    rating: show.movieRating ?? undefined,
-    href: `/movies/${show.movieId}`,
+    rating: show.showRating ?? undefined,
+    href: `/tvshows/${show.showId}`,
   }),
 };
 

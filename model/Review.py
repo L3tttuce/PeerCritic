@@ -8,6 +8,7 @@ from model.BaseTable import BaseTable
 if TYPE_CHECKING:
     from model.Movie import Movie
     from model.Song import Song
+    from model.TVShow import TVShow
     from model.User import User
 
 # Create Review database table
@@ -29,5 +30,7 @@ class Review(BaseTable, table=True):
 
     # Create foreign key
     song_id: int | None = Field(default=None, foreign_key="song.song_id")
-    # Create many-to-one relationship between Review and Movie
     song: Optional["Song"] = Relationship(back_populates="reviews")
+
+    tvshow_id: int | None = Field(default=None, foreign_key="tvshow.show_id")
+    tvshow: Optional["TVShow"] = Relationship(back_populates="reviews")

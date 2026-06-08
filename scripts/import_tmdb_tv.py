@@ -13,25 +13,10 @@ sys.path.append(os.getcwd())
 from model.database import engine
 
 from model.Actor import Actor
-from model.Artist import Artist
 from model.Director import Director
 from model.Episode import Episode
-from model.Friendship import Friendship
 from model.Genre import Genre
-from model.Messages import Message
-from model.Movie import Movie
-from model.MovieActor import MovieActor
-from model.MovieDirector import MovieDirector
-from model.MovieGenre import MovieGenre
-from model.MovieWriter import MovieWriter
-from model.Post import Post
-from model.Profile import Profile
-from model.Review import Review
-from model.Song import Song
-from model.SongArtist import SongArtist
-from model.SongGenre import SongGenre
-from model.Thread import Thread
-from model.User import User
+from model.TVShow import TVShow
 from model.Writer import Writer
 
 
@@ -113,36 +98,6 @@ def get_season_details(tmdb_id: int, season_number: int):
     return tmdb_get(f"/tv/{tmdb_id}/season/{season_number}")
 
 
-def choose_tv(results: list[dict]) -> dict | None:
-    if not results:
-        print("No TMDB results found.")
-        return None
-
-    print("\nTMDB TV results:")
-    for index, show in enumerate(results[:10], start=1):
-        name = show.get("name") or "Untitled"
-        first_air_date = show.get("first_air_date") or "Unknown date"
-        overview = (show.get("overview") or "").strip()
-        short_overview = overview[:90] + "..." if len(overview) > 90 else overview
-
-        print(f"{index}. {name} ({first_air_date})")
-        if short_overview:
-            print(f"   {short_overview}")
-
-    while True:
-        choice = input("\nPick a TV show number to import, or press Enter to cancel: ").strip()
-
-        if choice == "":
-            return None
-
-        if choice.isdigit():
-            index = int(choice)
-            if 1 <= index <= min(len(results), 10):
-                return results[index - 1]
-
-        print("Invalid choice. Try again.")
-
-
 def get_or_create_genre(session: Session, name: str) -> Genre:
     genre = session.exec(select(Genre).where(Genre.genre_name == name)).first()
 
@@ -193,14 +148,14 @@ def get_or_create_writer(session: Session, name: str) -> Writer:
 
 def upsert_episode(
     session: Session,
-    movie: Movie,
+    show: TVShow,
     episode_name: str,
     season_number: int | None,
     episode_number: int | None,
 ):
     existing_episode = session.exec(
         select(Episode).where(
-            Episode.movie_id == movie.movie_id,
+            Episode.show_id == show.show_id,
             Episode.season == season_number,
             Episode.episode_number == episode_number,
         )
@@ -214,7 +169,7 @@ def upsert_episode(
         episode_name=episode_name,
         season=season_number,
         episode_number=episode_number,
-        movie_id=movie.movie_id,
+        show_id=show.show_id,
     )
     session.add(episode)
     return episode
@@ -235,9 +190,9 @@ def upsert_tv_show(details: dict):
 
     with Session(engine) as session:
         existing_show = session.exec(
-            select(Movie).where(
-                Movie.movie_name == tv_name,
-                Movie.year == year,
+            select(TVShow).where(
+                TVShow.show_name == tv_name,
+                TVShow.year == year,
             )
         ).first()
 
@@ -245,9 +200,9 @@ def upsert_tv_show(details: dict):
             show = existing_show
             action = "Updated"
         else:
-            show = Movie(movie_name=tv_name)
-            show.movie_rating = 0
-            show.movie_rating_count = 0
+            show = TVShow(show_name=tv_name)
+            show.show_rating = 0
+            show.show_rating_count = 0
             action = "Created"
 
         session.add(show)
@@ -308,13 +263,11 @@ def upsert_tv_show(details: dict):
         session.flush()
 
         seasons = details.get("seasons", [])
-
         episode_count = 0
 
         for season in seasons:
             season_number = season.get("season_number")
 
-            # Skip specials. Remove this if you want season 0 imported.
             if season_number is None or season_number == 0:
                 continue
 
@@ -326,7 +279,7 @@ def upsert_tv_show(details: dict):
 
                 upsert_episode(
                     session=session,
-                    movie=show,
+                    show=show,
                     episode_name=episode_name,
                     season_number=season_number,
                     episode_number=episode_number,
@@ -338,8 +291,8 @@ def upsert_tv_show(details: dict):
         session.refresh(show)
 
         print(f"\n{action} TV show:")
-        print(f"  ID: {show.movie_id}")
-        print(f"  Title: {show.movie_name}")
+        print(f"  ID: {show.show_id}")
+        print(f"  Title: {show.show_name}")
         print(f"  Year: {show.year}")
         print(f"  TMDB ID: {tmdb_id}")
         print(f"  Video: {show.video}")

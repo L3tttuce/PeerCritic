@@ -11,6 +11,7 @@ from model.database import create_db_and_tables
 from router import (
     Authentication,
     MovieRouter,
+    TVShowRouter,
     ReviewsRouter,
     SongRouter,
     ArtistRouter,
@@ -96,6 +97,9 @@ app.include_router(Authentication.router)
 
 # Register Movie routes
 app.include_router(MovieRouter.router)
+
+# Register TV Show routes
+app.include_router(TVShowRouter.router)
 
 # Register Song routes
 app.include_router(SongRouter.router)
