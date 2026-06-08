@@ -33,6 +33,11 @@ from model.SongGenre import SongGenre
 from model.Thread import Thread
 from model.User import User
 from model.Writer import Writer
+from model.song_genres import (
+    is_blocked_genre_tag,
+    manual_genres_for_song,
+    map_raw_genres_to_canonical,
+)
 
 
 SPOTIFY_TOKEN_URL = "https://accounts.spotify.com/api/token"
@@ -226,31 +231,12 @@ def clean_lastfm_tag(tag_name: str) -> str | None:
     if not tag_name:
         return None
 
-    tag = tag_name.strip().lower()
+    tag = tag_name.strip()
 
-    blocked_tags = {
-        "seen live",
-        "favorites",
-        "favourite",
-        "favorite",
-        "spotify",
-        "lastfm",
-        "albums i own",
-        "songs",
-        "song",
-        "music",
-        "track",
-        "tracks",
-        "beautiful",
-        "awesome",
-        "love",
-        "loved",
-    }
-
-    if tag in blocked_tags:
+    if is_blocked_genre_tag(tag):
         return None
 
-    return tag.title()
+    return tag
 
 
 def get_lastfm_track_genres(song_name: str, artist_name: str, limit: int = 5) -> set[str]:
@@ -308,8 +294,8 @@ def get_spotify_artist_genres(artist_items: list[dict]) -> set[str]:
         artist_details = get_artist_details(artist_id)
 
         for genre_name in artist_details.get("genres", []):
-            if genre_name:
-                genre_names.add(genre_name.title())
+            if genre_name and not is_blocked_genre_tag(genre_name):
+                genre_names.add(genre_name.strip())
 
     return genre_names
 
@@ -399,11 +385,15 @@ def upsert_song(track: dict):
             if artist.get("name")
         ]
 
-        genre_names = get_genres(song_name, artist_items)
+        raw_genre_names = get_genres(song_name, artist_items)
+        canonical_genre_names = map_raw_genres_to_canonical(raw_genre_names)
+
+        if not canonical_genre_names:
+            canonical_genre_names = manual_genres_for_song(song_name)
 
         song.genres = [
             get_or_create_genre(session, genre_name)
-            for genre_name in sorted(genre_names)
+            for genre_name in sorted(canonical_genre_names)
         ]
 
         session.add(song)
