@@ -1,4 +1,4 @@
-# python scripts/import_tmdb_movie.py "Tv Show Title"
+# python scripts/import_tmdb_tv.py "Tv Show Title"
 
 import os
 import sys
@@ -248,9 +248,10 @@ def upsert_tv_show(details: dict):
             show = Movie(movie_name=tv_name)
             show.movie_rating = 0
             show.movie_rating_count = 0
-            session.add(show)
-            session.flush()
             action = "Created"
+
+        session.add(show)
+        session.flush()
 
         show.description = details.get("overview")
         show.year = year
@@ -352,11 +353,14 @@ def main():
 
     query = " ".join(sys.argv[1:]).strip()
     results = search_tv(query)
-    selected = choose_tv(results)
 
-    if not selected:
-        print("Cancelled.")
+    if not results:
+        print(f"No TMDB results found for: {query}")
         return
+
+    selected = results[0]
+
+    print(f'Auto-selected: {selected.get("name")} ({selected.get("first_air_date", "Unknown date")})')
 
     details = get_tv_details(selected["id"])
     upsert_tv_show(details)

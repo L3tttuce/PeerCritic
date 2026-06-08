@@ -351,16 +351,7 @@ def get_genres(song_name: str, artist_items: list[dict]) -> set[str]:
         print("Genres found from Last.fm artist tags.")
         return genre_names
 
-    print("No genres found from Spotify or Last.fm.")
-    manual = input("Enter genres separated by commas, or press Enter to skip: ").strip()
-
-    if manual:
-        genre_names.update(
-            genre.strip().title()
-            for genre in manual.split(",")
-            if genre.strip()
-        )
-
+    print("No genres found from Spotify or Last.fm. Skipping genres.")
     return genre_names
 
 
@@ -393,6 +384,9 @@ def upsert_song(track: dict):
             song.song_rating = 0
             song.song_rating_count = 0
             action = "Created"
+
+        session.add(song)
+        session.flush()
 
         song.year = year
         song.length = length
@@ -441,11 +435,20 @@ def main():
     query = " ".join(sys.argv[1:]).strip()
 
     results = search_songs(query)
-    selected = choose_song(results)
 
-    if not selected:
-        print("Cancelled.")
+    if not results:
+        print(f"No Spotify results found for: {query}")
         return
+
+    selected = results[0]
+
+    artist_names = ", ".join(
+        artist["name"]
+        for artist in selected.get("artists", [])
+        if artist.get("name")
+    )
+
+    print(f'Auto-selected: {selected.get("name")} - {artist_names}')
 
     upsert_song(selected)
 

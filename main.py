@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import time
 from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from model.database import create_db_and_tables
 from router import (
