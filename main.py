@@ -32,12 +32,18 @@ async def lifespan(app: FastAPI):
     create_db_and_tables()      # Creates all SQLModel tables if they don't exist
     yield
 
-# CORS configuration
-origins = ["http://localhost:3000", "http://169.254.244.127:3000"]
+# CORS configuration (comma-separated origins via env, localhost fallback for dev)
+_cors_env = os.getenv("CORS_ORIGINS", "http://localhost:3000")
+origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
 
 
 # Create FastAPI application instance
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 if os.getenv("DEBUG_TIMING"):
     @app.middleware("http")
