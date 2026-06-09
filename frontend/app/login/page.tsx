@@ -4,13 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import axios from 'axios';
+import { Suspense, useState } from "react";
+import api from "@/app/apiClient";
+import { notifyAuthChanged } from "@/app/authEvents";
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from "next/link";
 
-// Export the default page component
-export default function Page() {
+function LoginForm() {
   // Create useState 
   const [username, setUsername] = useState("");  // State variable for storing the username input value, start at an empty string
   const [password, setPassword] = useState("");
@@ -40,17 +40,18 @@ export default function Page() {
 
     try {
       //Send a POST request to the local backend login endpoint with username and password
-      const response = await axios.post("http://localhost:8000/login", new URLSearchParams({
-        username,
-        password,
-      }));
+      const response = await api.post(
+        "/login",
+        new URLSearchParams({ username, password }),
+        { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+      );
 
       // Log the server response data to the browser console for debugging
       console.log(response.data);
       // Store the access token in localStorage
       localStorage.setItem("accessToken", response.data.access_token);
       localStorage.setItem("refreshToken", response.data.refresh_token);
-      // Navigate the user to the home page when successful login
+      notifyAuthChanged();
       push(next);
     } catch (error) {
       console.error(error);
@@ -142,4 +143,12 @@ export default function Page() {
       </div>
     </div>
   )
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex min-h-svh items-center justify-center">Loading...</div>}>
+      <LoginForm />
+    </Suspense>
+  );
 }

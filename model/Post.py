@@ -20,7 +20,7 @@ class Post(BaseTable, table=True):
     like: int | None = 0
     
     # Create foreign key
-    thread_id: int | None = Field(default=None, foreign_key="thread.thread_id")
+    thread_id: int | None = Field(default=None, foreign_key="thread.thread_id", index=True)
     # Create many-to-one relationship between Thread and Post
     thread: Optional["Thread"] = Relationship(back_populates="posts")
 

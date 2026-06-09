@@ -4,6 +4,7 @@ import Navbar from "@/app/navbar";
 import { useParams, useRouter } from "next/navigation";
 import axios from "axios";
 import api from "@/app/apiClient";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Star, ThumbsUp } from "lucide-react";
@@ -21,7 +22,10 @@ import {
 import React from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { RichTextEditor } from "@/components/ui/rich-text-editor";
+const RichTextEditor = dynamic(
+  () => import("@/components/ui/rich-text-editor").then((m) => ({ default: m.RichTextEditor })),
+  { ssr: false }
+);
 
 type User = {
   userId: number;
@@ -120,11 +124,7 @@ export default function Page() {
   async function fetchThread() {
     try {
       // Send a Get request to the Get Thread endpoint using the id from the URL
-      const response = await axios.get("http://localhost:8000/threads/" + params.id, {
-        headers: {
-          "Accept": 'application/json'
-        }
-      });
+      const response = await api.get(`/threads/${params.id}`);
       // console.log(response);
       setThread(response.data);      // Store the returned thread data in state
     } catch (error) {
@@ -139,14 +139,8 @@ export default function Page() {
     }
     try {
       // Send a Get request to the Get Posts endpoint using the id from the URL
-      const response = await axios.get("http://localhost:8000/threads/" + params.id + "/posts", {
-        headers: {
-          "Accept": 'application/json'
-        },
-        params: {
-          page: 1,      // Request the first page of result
-          size: 20,     // Limit results to 20 posts
-        }
+      const response = await api.get(`/threads/${params.id}/posts`, {
+        params: { page: 1, size: 20 },
       });
       if (response && response.data) {
         // Extract the items array from the paginated response and store it in state

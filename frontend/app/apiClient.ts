@@ -1,7 +1,11 @@
 import axios from "axios";
+import { notifyAuthChanged } from "@/app/authEvents";
+
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 const api = axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: API_BASE_URL,
 });
 
 api.interceptors.request.use((config) => {
@@ -19,9 +23,13 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    const requestUrl = originalRequest.url ?? "";
+
     if (
       error.response?.status === 401 &&
-      !originalRequest._retry
+      !originalRequest._retry &&
+      !requestUrl.includes("/refresh") &&
+      !requestUrl.includes("/login")
     ) {
       originalRequest._retry = true;
 
@@ -33,8 +41,8 @@ api.interceptors.response.use(
       }
 
       try {
-        const refreshResponse = await axios.post(
-          "http://localhost:8000/refresh",
+        const refreshResponse = await api.post(
+          "/refresh",
           {},
           {
             headers: {
@@ -45,6 +53,7 @@ api.interceptors.response.use(
 
         localStorage.setItem("accessToken", refreshResponse.data.access_token);
         localStorage.setItem("refreshToken", refreshResponse.data.refresh_token);
+        notifyAuthChanged();
 
         originalRequest.headers.Authorization =
           `Bearer ${refreshResponse.data.access_token}`;
@@ -61,4 +70,11 @@ api.interceptors.response.use(
   }
 );
 
+export function getWsUrl(path: string): string {
+  const base = new URL(API_BASE_URL);
+  const protocol = base.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${base.host}${path}`;
+}
+
+export { api };
 export default api;

@@ -3,7 +3,8 @@
 import Navbar from "@/app/navbar";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import axios from "axios";
+import api from "@/app/apiClient";
+import { mediaHref } from "@/lib/types/media";
 import { Card } from "@/components/ui/card";
 import { MessageCircle, UserPlus, MoreVertical, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,9 +27,7 @@ type PublicReview = {
     kind: "movie" | "song" | "tv";
     title: string;
     cover?: string | null;
-    movieId: number | null;
-    songId: number | null;
-    showId: number | null;
+    mediaId: number;
 };
 
 type FriendStatus =
@@ -69,13 +68,10 @@ export default function PublicUserProfilePage() {
             try {
                 setLoading(true);
 
-                const userResponse = await axios.get(`http://localhost:8000/public/users/${userId}`, {
-                    headers: { Accept: "application/json" },
-                });
-
-                const reviewsResponse = await axios.get(`http://localhost:8000/public/users/${userId}/reviews`, {
-                    headers: { Accept: "application/json" },
-                });
+                const [userResponse, reviewsResponse] = await Promise.all([
+                    api.get(`/public/users/${userId}`),
+                    api.get(`/public/users/${userId}/reviews`),
+                ]);
 
                 setUser(userResponse.data);
                 setReviews(reviewsResponse.data ?? []);
@@ -84,15 +80,7 @@ export default function PublicUserProfilePage() {
 
                 if (token) {
                     try {
-                        const statusResponse = await axios.get(
-                            `http://localhost:8000/my/friends/status/${userId}`,
-                            {
-                                headers: {
-                                    Accept: "application/json",
-                                    Authorization: `Bearer ${token}`,
-                                },
-                            }
-                        );
+                        const statusResponse = await api.get(`/my/friends/status/${userId}`);
 
                         setFriendStatus(statusResponse.data.status);
                     } catch (error) {
@@ -124,16 +112,7 @@ export default function PublicUserProfilePage() {
         }
 
         try {
-            await axios.post(
-                `http://localhost:8000/my/friends/request/${userId}`,
-                {},
-                {
-                    headers: {
-                        Accept: "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
+            await api.post(`/my/friends/request/${userId}`, {});
 
             setFriendStatus("pending_sent");
         } catch (error) {
@@ -151,16 +130,7 @@ export default function PublicUserProfilePage() {
         }
 
         try {
-            await axios.post(
-                `http://localhost:8000/my/friends/accept/${userId}`,
-                {},
-                {
-                    headers: {
-                        Accept: "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
+            await api.post(`/my/friends/accept/${userId}`, {});
 
             setFriendStatus("accepted");
         } catch (error) {
@@ -178,12 +148,7 @@ export default function PublicUserProfilePage() {
         }
 
         try {
-            await axios.delete(`http://localhost:8000/my/friends/${userId}`, {
-                headers: {
-                    Accept: "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-            });
+            await api.delete(`/my/friends/${userId}`);
 
             setFriendStatus("none");
             setOpenFriendMenu(false);
@@ -202,16 +167,7 @@ export default function PublicUserProfilePage() {
         }
 
         try {
-            const response = await axios.post(
-                `http://localhost:8000/messages/dm/${userId}`,
-                {},
-                {
-                    headers: {
-                        Accept: "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
-                }
-            );
+            const response = await api.post(`/messages/dm/${userId}`, {});
 
             window.location.href = `/messages?conversationId=${response.data.conversationId}`;
         } catch (error) {
@@ -388,13 +344,7 @@ export default function PublicUserProfilePage() {
                                                 <div className="p-4">
                                                     <div className="flex items-start gap-4">
                                                         <Link
-                                                            href={
-                                                                r.kind === "song"
-                                                                    ? `/songs/${r.songId}`
-                                                                    : r.kind === "tv"
-                                                                        ? `/tvshows/${r.showId}`
-                                                                        : `/movies/${r.movieId}`
-                                                            }
+                                                            href={mediaHref(r.kind, r.mediaId)}
                                                             className="h-14 w-14 shrink-0 overflow-hidden rounded-md border border-orange-200 bg-orange-100"
                                                         >
                                                             {r.cover ? (
@@ -416,13 +366,7 @@ export default function PublicUserProfilePage() {
                                                             <div className="flex items-start justify-between gap-3">
                                                                 <div className="min-w-0">
                                                                     <Link
-                                                                        href={
-                                                                r.kind === "song"
-                                                                    ? `/songs/${r.songId}`
-                                                                    : r.kind === "tv"
-                                                                        ? `/tvshows/${r.showId}`
-                                                                        : `/movies/${r.movieId}`
-                                                            }
+                                                                        href={mediaHref(r.kind, r.mediaId)}
                                                                         className="block truncate font-medium text-gray-900 hover:underline"
                                                                     >
                                                                         {r.title}

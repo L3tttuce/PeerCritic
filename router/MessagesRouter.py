@@ -4,6 +4,7 @@ from typing import Annotated, Optional
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import delete, update
 from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
 
@@ -17,6 +18,9 @@ from model.Movie import Movie
 from model.Song import Song
 from model.TVShow import TVShow
 from router.Authentication import get_current_user
+from utils.pairs import canonical_pair
+from utils.reviews import review_to_shared_out
+from utils.users import user_card
 from ws_manager import manager
 
 
@@ -24,46 +28,23 @@ def hard_delete_conversation(session: Session, conversation_id: int) -> None:
     """
     Fully delete a conversation and all dependent rows in FK-safe order.
     """
-
-    members = session.exec(
-        select(ConversationMember).where(
+    session.exec(
+        update(ConversationMember)
+        .where(ConversationMember.conversation_id == conversation_id)
+        .values(last_read_message_id=None)
+    )
+    session.exec(
+        delete(Message).where(Message.conversation_id == conversation_id)
+    )
+    session.exec(
+        delete(ConversationMember).where(
             ConversationMember.conversation_id == conversation_id
         )
-    ).all()
-
-    for member in members:
-        if member.last_read_message_id is not None:
-            member.last_read_message_id = None
-            session.add(member)
-
-    session.commit()
-
-    messages = session.exec(
-        select(Message).where(Message.conversation_id == conversation_id)
-    ).all()
-    for msg in messages:
-        session.delete(msg)
-
-    session.commit()
-
-    members = session.exec(
-        select(ConversationMember).where(
-            ConversationMember.conversation_id == conversation_id
-        )
-    ).all()
-    for member in members:
-        session.delete(member)
-
-    session.commit()
-
+    )
     conv = session.get(Conversation, conversation_id)
     if conv:
         session.delete(conv)
-        session.commit()
-
-
-def canonical_pair(a: int, b: int) -> tuple[int, int]:
-    return (a, b) if a < b else (b, a)
+    session.commit()
 
 
 router = APIRouter(prefix="/messages", tags=["messages"])
@@ -86,52 +67,7 @@ def build_shared_review(session: Session, review_id: int | None):
     if not review:
         return None
 
-    if review.tvshow_id is not None and review.tvshow is not None:
-        return {
-            "reviewId": review.review_id,
-            "review": review.review,
-            "reviewRating": review.review_rating,
-            "reviewRatingCount": review.review_rating_count,
-            "kind": "tv",
-            "title": review.tvshow.show_name,
-            "cover": review.tvshow.cover,
-            "year": review.tvshow.year,
-            "movieId": None,
-            "songId": None,
-            "showId": review.tvshow_id,
-        }
-
-    if review.movie_id is not None and review.movie is not None:
-        return {
-            "reviewId": review.review_id,
-            "review": review.review,
-            "reviewRating": review.review_rating,
-            "reviewRatingCount": review.review_rating_count,
-            "kind": "movie",
-            "title": review.movie.movie_name,
-            "cover": review.movie.cover,
-            "year": review.movie.year,
-            "movieId": review.movie_id,
-            "songId": None,
-            "showId": None,
-        }
-
-    if review.song_id is not None and review.song is not None:
-        return {
-            "reviewId": review.review_id,
-            "review": review.review,
-            "reviewRating": review.review_rating,
-            "reviewRatingCount": review.review_rating_count,
-            "kind": "song",
-            "title": review.song.song_name,
-            "cover": review.song.cover,
-            "year": review.song.year,
-            "movieId": None,
-            "songId": review.song_id,
-            "showId": None,
-        }
-
-    return None
+    return review_to_shared_out(review)
 
 
 def build_shared_media(
@@ -141,58 +77,192 @@ def build_shared_media(
     tvshow_id: int | None,
 ):
     if tvshow_id is not None:
-        show = session.exec(
-            select(TVShow).where(TVShow.show_id == tvshow_id)
-        ).first()
-
+        show = session.get(TVShow, tvshow_id)
         if not show:
             return None
-
         return {
             "kind": "tv",
-            "id": show.show_id,
-            "title": show.show_name,
+            "id": show.id,
+            "title": show.title,
             "cover": show.cover,
             "year": show.year,
-            "rating": show.show_rating,
-            "href": f"/tvshows/{show.show_id}",
+            "rating": show.rating,
+            "href": f"/tvshows/{show.id}",
         }
 
     if movie_id is not None:
-        movie = session.exec(
-            select(Movie).where(Movie.movie_id == movie_id)
-        ).first()
-
+        movie = session.get(Movie, movie_id)
         if not movie:
             return None
-
         return {
             "kind": "movie",
-            "id": movie.movie_id,
-            "title": movie.movie_name,
+            "id": movie.id,
+            "title": movie.title,
             "cover": movie.cover,
             "year": movie.year,
-            "rating": movie.movie_rating,
-            "href": f"/movies/{movie.movie_id}",
+            "rating": movie.rating,
+            "href": f"/movies/{movie.id}",
         }
 
     if song_id is not None:
-        song = session.exec(select(Song).where(Song.song_id == song_id)).first()
-
+        song = session.get(Song, song_id)
         if not song:
             return None
-
         return {
             "kind": "song",
-            "id": song.song_id,
-            "title": song.song_name,
+            "id": song.id,
+            "title": song.title,
             "cover": song.cover,
             "year": song.year,
-            "rating": song.song_rating,
-            "href": f"/songs/{song.song_id}",
+            "rating": song.rating,
+            "href": f"/songs/{song.id}",
         }
 
     return None
+
+
+def _batch_fetch_dm_users(
+    session: Session, user_ids: set[int]
+) -> dict[int, tuple[User, Profile | None]]:
+    if not user_ids:
+        return {}
+    rows = session.exec(
+        select(User, Profile)
+        .join(Profile, Profile.user_id == User.user_id, isouter=True)
+        .where(User.user_id.in_(user_ids))
+    ).all()
+    return {user.user_id: (user, profile) for user, profile in rows}
+
+
+def _batch_fetch_shared_reviews(
+    session: Session, review_ids: set[int]
+) -> dict[int, dict | None]:
+    if not review_ids:
+        return {}
+    reviews = session.exec(
+        select(Review)
+        .where(Review.review_id.in_(review_ids))
+        .options(
+            selectinload(Review.movie),
+            selectinload(Review.song),
+            selectinload(Review.tvshow),
+        )
+    ).all()
+    return {r.review_id: review_to_shared_out(r) for r in reviews}
+
+
+def _batch_fetch_shared_media(
+    session: Session,
+    movie_ids: set[int],
+    song_ids: set[int],
+    tvshow_ids: set[int],
+) -> dict[tuple[str, int], dict]:
+    out: dict[tuple[str, int], dict] = {}
+
+    if movie_ids:
+        for movie in session.exec(
+            select(Movie).where(Movie.id.in_(movie_ids))
+        ).all():
+            out[("movie", movie.id)] = {
+                "kind": "movie",
+                "id": movie.id,
+                "title": movie.title,
+                "cover": movie.cover,
+                "year": movie.year,
+                "rating": movie.rating,
+                "href": f"/movies/{movie.id}",
+            }
+
+    if song_ids:
+        for song in session.exec(select(Song).where(Song.id.in_(song_ids))).all():
+            out[("song", song.id)] = {
+                "kind": "song",
+                "id": song.id,
+                "title": song.title,
+                "cover": song.cover,
+                "year": song.year,
+                "rating": song.rating,
+                "href": f"/songs/{song.id}",
+            }
+
+    if tvshow_ids:
+        for show in session.exec(
+            select(TVShow).where(TVShow.id.in_(tvshow_ids))
+        ).all():
+            out[("tv", show.id)] = {
+                "kind": "tv",
+                "id": show.id,
+                "title": show.title,
+                "cover": show.cover,
+                "year": show.year,
+                "rating": show.rating,
+                "href": f"/tvshows/{show.id}",
+            }
+
+    return out
+
+
+def _attach_shared_content(
+    session: Session, msgs: list[Message]
+) -> list[dict]:
+    review_ids = {
+        m.shared_review_id
+        for m in msgs
+        if m.message_type == "review_share" and m.shared_review_id is not None
+    }
+    movie_ids = {
+        m.shared_movie_id
+        for m in msgs
+        if m.message_type == "media_share" and m.shared_movie_id is not None
+    }
+    song_ids = {
+        m.shared_song_id
+        for m in msgs
+        if m.message_type == "media_share" and m.shared_song_id is not None
+    }
+    tvshow_ids = {
+        m.shared_tvshow_id
+        for m in msgs
+        if m.message_type == "media_share" and m.shared_tvshow_id is not None
+    }
+
+    reviews_by_id = _batch_fetch_shared_reviews(session, review_ids)
+    media_by_key = _batch_fetch_shared_media(
+        session, movie_ids, song_ids, tvshow_ids
+    )
+
+    result = []
+    for m in msgs:
+        shared_review = None
+        if m.message_type == "review_share" and m.shared_review_id is not None:
+            shared_review = reviews_by_id.get(m.shared_review_id)
+
+        shared_media = None
+        if m.message_type == "media_share":
+            if m.shared_tvshow_id is not None:
+                shared_media = media_by_key.get(("tv", m.shared_tvshow_id))
+            elif m.shared_movie_id is not None:
+                shared_media = media_by_key.get(("movie", m.shared_movie_id))
+            elif m.shared_song_id is not None:
+                shared_media = media_by_key.get(("song", m.shared_song_id))
+
+        result.append(
+            {
+                "messageId": m.message_id,
+                "conversationId": m.conversation_id,
+                "fromUserId": m.from_user_id,
+                "messageText": m.message_text,
+                "messageType": m.message_type,
+                "sharedReviewId": m.shared_review_id,
+                "sharedMovieId": m.shared_movie_id,
+                "sharedSongId": m.shared_song_id,
+                "sharedTvshowId": m.shared_tvshow_id,
+                "sharedReview": shared_review,
+                "sharedMedia": shared_media,
+                "sentDatetime": m.sent_datetime,
+            }
+        )
+    return result
 
 
 @router.get("/conversations")
@@ -228,10 +298,20 @@ def list_conversations(
     if not memberships:
         return []
 
+    dm_other_ids: set[int] = set()
+    for _member, conv in memberships:
+        if not conv.is_group and conv.dm_user_low_id and conv.dm_user_high_id:
+            dm_other_ids.add(
+                conv.dm_user_high_id
+                if conv.dm_user_low_id == current_user.user_id
+                else conv.dm_user_low_id
+            )
+
+    dm_users = _batch_fetch_dm_users(session, dm_other_ids)
+
     out = []
 
     for member, conv in memberships:
-        dm_other_user_id: Optional[int] = None
         other_user = None
         other_profile = None
 
@@ -241,12 +321,7 @@ def list_conversations(
                 if conv.dm_user_low_id == current_user.user_id
                 else conv.dm_user_low_id
             )
-
-            row = session.exec(
-                select(User, Profile)
-                .join(Profile, Profile.user_id == User.user_id, isouter=True)
-                .where(User.user_id == dm_other_user_id)
-            ).first()
+            row = dm_users.get(dm_other_user_id)
             if row:
                 other_user, other_profile = row
 
@@ -379,8 +454,7 @@ def create_or_get_dm(
         updated_at=datetime.now(timezone.utc),
     )
     session.add(conv)
-    session.commit()
-    session.refresh(conv)
+    session.flush()
 
     now = datetime.now(timezone.utc)
     m1 = ConversationMember(
@@ -470,33 +544,7 @@ def list_messages(
 
     msgs.reverse()
 
-    return [
-        {
-            "messageId": m.message_id,
-            "conversationId": m.conversation_id,
-            "fromUserId": m.from_user_id,
-            "messageText": m.message_text,
-            "messageType": m.message_type,
-            "sharedReviewId": m.shared_review_id,
-            "sharedMovieId": m.shared_movie_id,
-            "sharedSongId": m.shared_song_id,
-            "sharedTvshowId": m.shared_tvshow_id,
-            "sharedReview": (
-                build_shared_review(session, m.shared_review_id)
-                if m.message_type == "review_share"
-                else None
-            ),
-            "sharedMedia": (
-                build_shared_media(
-                    session, m.shared_movie_id, m.shared_song_id, m.shared_tvshow_id
-                )
-                if m.message_type == "media_share"
-                else None
-            ),
-            "sentDatetime": m.sent_datetime,
-        }
-        for m in msgs
-    ]
+    return _attach_shared_content(session, msgs)
 
 
 @router.post("/conversations/{conversation_id}/messages")
@@ -612,28 +660,9 @@ async def send_message(
 
     session.commit()
 
+    attached = _attach_shared_content(session, [msg])[0]
     response_payload = {
-        "messageId": msg.message_id,
-        "conversationId": msg.conversation_id,
-        "fromUserId": msg.from_user_id,
-        "messageText": msg.message_text,
-        "messageType": msg.message_type,
-        "sharedReviewId": msg.shared_review_id,
-        "sharedMovieId": msg.shared_movie_id,
-        "sharedSongId": msg.shared_song_id,
-        "sharedTvshowId": msg.shared_tvshow_id,
-        "sharedReview": (
-            build_shared_review(session, msg.shared_review_id)
-            if msg.message_type == "review_share"
-            else None
-        ),
-        "sharedMedia": (
-            build_shared_media(
-                session, msg.shared_movie_id, msg.shared_song_id, msg.shared_tvshow_id
-            )
-            if msg.message_type == "media_share"
-            else None
-        ),
+        **attached,
         "sentDatetime": msg.sent_datetime.isoformat(),
     }
 
@@ -779,8 +808,6 @@ async def delete_message(
     for m in members_pointing_to_message:
         m.last_read_message_id = None
         session.add(m)
-
-    session.commit()
 
     session.delete(msg)
     session.commit()

@@ -1,8 +1,9 @@
 "use client";
 
 import Navbar from "@/app/navbar";
-import { useEffect, useRef, useState, useCallback } from "react";
-import axios from "axios";
+import { Suspense, useEffect, useRef, useState, useCallback } from "react";
+import api, { getWsUrl } from "@/app/apiClient";
+import { mediaHref } from "@/lib/types/media";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, Plus, X, Star } from "lucide-react";
@@ -83,9 +84,7 @@ type SharedReview = {
   title: string;
   cover?: string | null;
   year: number;
-  movieId: number | null;
-  songId: number | null;
-  showId: number | null;
+  mediaId: number;
 };
 
 type SharedMedia = {
@@ -102,22 +101,8 @@ function cx(...classes: Array<string | false | undefined | null>) {
   return classes.filter(Boolean).join(" ");
 }
 
-const api = axios.create({
-  baseURL: "http://localhost:8000",
-});
-
-function authHeaders() {
-  const token = localStorage.getItem("accessToken");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
 function ReviewShareCard({ review }: { review: SharedReview }) {
-  const href =
-    review.kind === "song"
-      ? `/songs/${review.songId}`
-      : review.kind === "tv"
-        ? `/tvshows/${review.showId}`
-        : `/movies/${review.movieId}`;
+  const href = mediaHref(review.kind, review.mediaId);
 
   const reviewText = review.review?.trim() || "No written review.";
 
@@ -250,7 +235,7 @@ function MediaShareCard({ media }: { media: SharedMedia }) {
   );
 }
 
-export default function Messages() {
+function MessagesContent() {
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [selected, setSelected] = useState<ConversationRow | null>(null);
   const [messages, setMessages] = useState<MsgRow[]>([]);
@@ -297,7 +282,7 @@ export default function Messages() {
     try {
       const res = await api.get<MsgRow[]>(
         `/messages/conversations/${selected.conversationId}/messages?limit=50&before_message_id=${oldestMessageId}`,
-        { headers: authHeaders() }
+        {}
       );
 
       const older = res.data;
@@ -333,7 +318,7 @@ export default function Messages() {
   const loadMembers = useCallback(async (conversationId: number) => {
     const res = await api.get<MemberRow[]>(
       `/messages/conversations/${conversationId}/members`,
-      { headers: authHeaders() }
+      {}
     );
     const map: Record<number, MemberRow> = {};
     for (const m of res.data) map[m.userId] = m;
@@ -342,7 +327,6 @@ export default function Messages() {
 
   async function fetchMe() {
     const res = await api.get<CurrentUser>("/current_user", {
-      headers: authHeaders(),
     });
     setMe(res.data);
   }
@@ -351,7 +335,6 @@ export default function Messages() {
     setLoadingFriends(true);
     try {
       const res = await api.get<FriendRow[]>("/my/friends", {
-        headers: authHeaders(),
       });
       setFriends(res.data);
     } finally {
@@ -377,7 +360,6 @@ export default function Messages() {
 
   const refreshConversations = useCallback(async () => {
     const res = await api.get<ConversationRow[]>("/messages/conversations", {
-      headers: authHeaders(),
     });
     setConversations(res.data);
   }, []);
@@ -397,9 +379,8 @@ export default function Messages() {
       return;
     }
 
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const ws = new WebSocket(
-      `${protocol}://localhost:8000/ws/messages?token=${encodeURIComponent(token)}`
+      `${getWsUrl("/ws/messages")}?token=${encodeURIComponent(token)}`
     );
 
     wsRef.current = ws;
@@ -433,7 +414,7 @@ export default function Messages() {
             api.post(
               `/messages/conversations/${m.conversationId}/read`,
               {},
-              { headers: authHeaders() }
+              {}
             )
               .then(refresh)
               .catch(console.log);
@@ -495,7 +476,7 @@ export default function Messages() {
     const res = await api.post<{ conversationId: number }>(
       `/messages/dm/${friendUserId}`,
       {},
-      { headers: authHeaders() }
+      {}
     );
 
     // refresh conversations and open the created one
@@ -505,7 +486,7 @@ export default function Messages() {
     const conv =
       conversations.find((c) => c.conversationId === convoId) ??
       (await api
-        .get<ConversationRow[]>("/messages/conversations", { headers: authHeaders() })
+        .get<ConversationRow[]>("/messages/conversations", {})
         .then((r) => r.data.find((c) => c.conversationId === convoId)));
 
     if (conv) {
@@ -545,7 +526,6 @@ export default function Messages() {
 
     try {
       await api.delete(`/messages/conversations/${conv.conversationId}`, {
-        headers: authHeaders(),
       });
 
       await refreshConversations();
@@ -603,21 +583,17 @@ export default function Messages() {
       }
     }
 
-    await loadMembers(conv.conversationId);
+    const [, messagesRes] = await Promise.all([
+      loadMembers(conv.conversationId),
+      api.get<MsgRow[]>(
+        `/messages/conversations/${conv.conversationId}/messages?limit=80`,
+        {}
+      ),
+    ]);
+    setMessages(messagesRes.data);
 
-    const res = await api.get<MsgRow[]>(
-      `/messages/conversations/${conv.conversationId}/messages?limit=80`,
-      { headers: authHeaders() }
-    );
-    setMessages(res.data);
-
-    await api.post(
-      `/messages/conversations/${conv.conversationId}/read`,
-      {},
-      { headers: authHeaders() }
-    );
-
-    await refreshConversations();
+    void api.post(`/messages/conversations/${conv.conversationId}/read`, {}, {});
+    void refreshConversations();
   }, [ensureWs, loadMembers, refreshConversations]);
 
   async function sendMessage() {
@@ -630,7 +606,7 @@ export default function Messages() {
     const res = await api.post<MsgRow>(
       `/messages/conversations/${selected.conversationId}/messages`,
       { messageText: text },
-      { headers: authHeaders() }
+      {}
     );
 
     const newMsg = res.data;
@@ -662,7 +638,6 @@ export default function Messages() {
 
   async function deleteMessage(messageId: number) {
     await api.delete(`/messages/messages/${messageId}`, {
-      headers: authHeaders(),
     });
 
     setMessages((prev) => prev.filter((m) => m.messageId !== messageId));
@@ -1080,5 +1055,13 @@ export default function Messages() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function Messages() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Loading messages...</div>}>
+      <MessagesContent />
+    </Suspense>
   );
 }

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 # Create User database table
 class User(BaseTable, table=True):
     user_id: int | None = Field(default=None, primary_key=True)  # Create id
-    username: str  # required field
+    username: str = Field(index=True, unique=True)
     password: str
     recovery_code_hash: str | None = None
 

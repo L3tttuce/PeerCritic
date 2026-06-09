@@ -1,8 +1,9 @@
 "use client"
 
 import Navbar from "@/app/navbar";
+import dynamic from "next/dynamic";
 import {useEffect, useState} from "react";
-import axios from "axios";
+import api from "@/app/apiClient";
 import {Card, CardDescription, CardHeader, CardTitle} from "@/components/ui/card";
 import Link from "next/link";
 import {SearchIcon, Star} from "lucide-react";
@@ -22,7 +23,10 @@ import {
 import {Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
 import {useRouter} from "next/navigation";
 import {Button} from "@/components/ui/button";
-import {RichTextEditor} from "@/components/ui/rich-text-editor";
+const RichTextEditor = dynamic(
+  () => import("@/components/ui/rich-text-editor").then((m) => ({ default: m.RichTextEditor })),
+  { ssr: false }
+);
 import {Input} from "@/components/ui/input";
 
 // Define type for user object 
@@ -90,11 +94,7 @@ export default function Page() {
     }
 
     try {
-      const response = await axios.get("http://localhost:8000/current_user", {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-      });
+      const response = await api.get("/current_user");
       console.log(response);
       setUser(response.data);
     } catch (error: any) {
@@ -114,14 +114,8 @@ export default function Page() {
     }
     try {
       // Send a GET resquest to the search threads endpoint using the id from the URL
-      const response = await axios.get("http://localhost:8000/threads", {
-        headers: {
-          "Accept": 'application/json'
-        },
-        params: {
-          page: page,      // Request the first page of result
-          size: 8,     // Limit results to 8 search movies
-        }
+      const response = await api.get("/threads", {
+        params: { page, size: 8 },
       });
       // Get the item array from the Search Threads responses and store it in state
       setThreads(response.data.items as Thread[]);
@@ -135,14 +129,9 @@ export default function Page() {
   async function createThread() {
     try {
       // Send a GET request to the search threads endpoint using the id from the URL
-      const response = await axios.post("http://localhost:8000/threads", {
+      const response = await api.post("/threads", {
         threadName,
-        threadContent
-      }, {
-        headers: {
-          Authorization: "Bearer " + localStorage.getItem("accessToken"),
-          Accept: "application/json",
-        },
+        threadContent,
       });
       setThreadName("");
       setThreadContent("");

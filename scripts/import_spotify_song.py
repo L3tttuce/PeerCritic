@@ -6,34 +6,13 @@ from datetime import datetime
 
 import requests
 from dotenv import load_dotenv
-from sqlmodel import Session, select
+from sqlmodel import select
 
 sys.path.append(os.getcwd())
 
-from model.database import engine
-
-from model.Actor import Actor
-from model.Artist import Artist
-from model.Director import Director
-from model.Episode import Episode
-from model.Friendship import Friendship
-from model.Genre import Genre
-from model.Messages import Message
-from model.Movie import Movie
-from model.MovieActor import MovieActor
-from model.MovieDirector import MovieDirector
-from model.MovieGenre import MovieGenre
-from model.MovieWriter import MovieWriter
-from model.Post import Post
-from model.Profile import Profile
-from model.Review import Review
 from model.Song import Song
-from model.SongArtist import SongArtist
-from model.SongGenre import SongGenre
-from model.Thread import Thread
-from model.User import User
-from model.Writer import Writer
-from model.song_genres import (
+from scripts.lib.db_helpers import get_or_create_artist, get_or_create_genre, get_session
+from model.song_genre_mapping import (
     is_blocked_genre_tag,
     manual_genres_for_song,
     map_raw_genres_to_canonical,
@@ -144,71 +123,6 @@ def search_songs(query: str):
 
 def get_artist_details(spotify_artist_id: str):
     return spotify_get(f"/artists/{spotify_artist_id}")
-
-
-def choose_song(results: list[dict]) -> dict | None:
-    if not results:
-        print("No Spotify results found.")
-        return None
-
-    print("\nSpotify song results:")
-
-    for index, track in enumerate(results[:10], start=1):
-        song_name = track.get("name") or "Untitled"
-
-        artist_names = ", ".join(
-            artist["name"]
-            for artist in track.get("artists", [])
-            if artist.get("name")
-        )
-
-        album_name = track.get("album", {}).get("name") or "Unknown album"
-        release_date = track.get("album", {}).get("release_date") or "Unknown date"
-
-        print(f"{index}. {song_name} - {artist_names}")
-        print(f"   Album: {album_name} ({release_date})")
-
-    while True:
-        choice = input("\nPick a song number to import, or press Enter to cancel: ").strip()
-
-        if choice == "":
-            return None
-
-        if choice.isdigit():
-            index = int(choice)
-
-            if 1 <= index <= min(len(results), 10):
-                return results[index - 1]
-
-        print("Invalid choice. Try again.")
-
-
-def get_or_create_artist(session: Session, name: str) -> Artist:
-    artist = session.exec(
-        select(Artist).where(Artist.artist_name == name)
-    ).first()
-
-    if artist:
-        return artist
-
-    artist = Artist(artist_name=name)
-    session.add(artist)
-    session.flush()
-    return artist
-
-
-def get_or_create_genre(session: Session, name: str) -> Genre:
-    genre = session.exec(
-        select(Genre).where(Genre.genre_name == name)
-    ).first()
-
-    if genre:
-        return genre
-
-    genre = Genre(genre_name=name)
-    session.add(genre)
-    session.flush()
-    return genre
 
 
 def get_album_cover(track: dict) -> str | None:
@@ -354,10 +268,10 @@ def upsert_song(track: dict):
 
     artist_items = track.get("artists", [])
 
-    with Session(engine) as session:
+    with get_session() as session:
         existing_song = session.exec(
             select(Song).where(
-                Song.song_name == song_name,
+                Song.title == song_name,
                 Song.year == year,
             )
         ).first()
@@ -366,9 +280,9 @@ def upsert_song(track: dict):
             song = existing_song
             action = "Updated"
         else:
-            song = Song(song_name=song_name)
-            song.song_rating = 0
-            song.song_rating_count = 0
+            song = Song(title=song_name)
+            song.rating = 0
+            song.rating_count = 0
             action = "Created"
 
         session.add(song)
@@ -401,8 +315,8 @@ def upsert_song(track: dict):
         session.refresh(song)
 
         print(f"\n{action} song:")
-        print(f"  ID: {song.song_id}")
-        print(f"  Title: {song.song_name}")
+        print(f"  ID: {song.id}")
+        print(f"  Title: {song.title}")
         print(f"  Year: {song.year}")
         print(f"  Length: {song.length}")
         print(f"  Spotify ID: {spotify_id}")

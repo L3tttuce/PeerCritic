@@ -1,6 +1,7 @@
 "use client";
 
-import axios from "axios";
+import api from "@/app/apiClient";
+import { mediaHref } from "@/lib/types/media";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { MoreVertical, Share2, Star } from "lucide-react";
@@ -80,30 +81,14 @@ export default function ReviewsPanel() {
     if (!token || !shareReview) return;
 
     try {
-      const conv = await axios.post(
-        `http://localhost:8000/messages/dm/${friendId}`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
+      const conv = await api.post(`/messages/dm/${friendId}`, {});
       const conversationId = conv.data.conversationId;
 
-      await axios.post(
-        `http://localhost:8000/messages/conversations/${conversationId}/messages`,
-        {
-          messageText: "Shared a review",
-          messageType: "review_share",
-          sharedReviewId: shareReview.reviewId,
-        },
-        {
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      await api.post(`/messages/conversations/${conversationId}/messages`, {
+        messageText: "Shared a review",
+        messageType: "review_share",
+        sharedReviewId: shareReview.reviewId,
+      });
 
       setShareReview(null);
       setFriends([]);
@@ -125,11 +110,7 @@ export default function ReviewsPanel() {
     const token = localStorage.getItem("accessToken");
     if (!token) return;
 
-    axios.get("http://localhost:8000/my/friends", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }).then(res => setFriends(res.data))
+    api.get("/my/friends").then(res => setFriends(res.data))
       .catch(err => console.error(err));
 
   }, [shareReview]);
@@ -320,13 +301,7 @@ export default function ReviewsPanel() {
                       <div className="flex items-start gap-4">
                         {/*Cover*/}
                         <Link
-                          href={
-                            r.kind === "song"
-                              ? `/songs/${r.songId}`
-                              : r.kind === "tv"
-                                ? `/tvshows/${r.showId}`
-                                : `/movies/${r.movieId}`
-                          }
+                          href={mediaHref(r.kind, r.mediaId)}
                           className="h-14 w-14 shrink-0 overflow-hidden rounded-md border border-orange-200 bg-orange-100"
                         >
                           {r.cover ? (
@@ -349,13 +324,7 @@ export default function ReviewsPanel() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <Link
-                                href={
-                            r.kind === "song"
-                              ? `/songs/${r.songId}`
-                              : r.kind === "tv"
-                                ? `/tvshows/${r.showId}`
-                                : `/movies/${r.movieId}`
-                          }
+                                href={mediaHref(r.kind, r.mediaId)}
                                 className="block truncate font-medium text-gray-900 hover:underline"
                               >
                                 {r.title}

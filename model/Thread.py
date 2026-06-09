@@ -21,7 +21,7 @@ class Thread(BaseTable, table=True):
     like: int | None = 0
     
     # Create foreign key
-    profile_id: int | None = Field(default=None, foreign_key="profile.profile_id")
+    profile_id: int | None = Field(default=None, foreign_key="profile.profile_id", index=True)
     # Create many-to-one relationship between Thread and Profile
     profile: Optional["Profile"] = Relationship(back_populates="threads")
     # Create one-to-many relationship between Thread and Post

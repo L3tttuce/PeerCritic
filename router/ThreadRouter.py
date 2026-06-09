@@ -23,22 +23,27 @@ async def get_thread(
         thread_id: Annotated[int, Path(title = "id of thread")],
         session: SessionDep
 ) -> ThreadPublic:
-    # Query the database for the thread that has thread_id matches the given path parameter
-    thread = session.exec(select(Thread).where(Thread.thread_id == thread_id)).first()
+    thread = session.exec(
+        select(Thread)
+        .where(Thread.thread_id == thread_id)
+        .options(joinedload(Thread.profile).joinedload(Profile.user))
+    ).first()
 
-    profile = session.exec(select(Profile).where(Profile.profile_id == thread.profile_id )).first()
-    
-    user = session.exec(select(User).where(User.user_id == profile.user_id)).first()
-    
-    # Return a DTO by extracting fields from the ORM object
+    profile = thread.profile
+    user = profile.user
+
     return ThreadPublic(
         thread_id=thread.thread_id,
-        profile=ProfilePublic(user=UserPublic(user_id=user.user_id, username=user.username), avatar=profile.avatar, 
-                              first_name=profile.first_name, last_name=profile.last_name),
+        profile=ProfilePublic(
+            user=UserPublic(user_id=user.user_id, username=user.username),
+            avatar=profile.avatar,
+            first_name=profile.first_name,
+            last_name=profile.last_name,
+        ),
         thread_name=thread.thread_name,
         timestamp=thread.timestamp,
         thread_content=thread.thread_content,
-        like=thread.like
+        like=thread.like,
     )
 
 # Define a GET route for finding posts of thread
@@ -93,7 +98,21 @@ async def create_thread(
     session.add(thread)
     session.commit()
     session.refresh(thread)
-    return await get_thread(thread.thread_id, session)
+
+    profile = current_user.profile
+    return ThreadPublic(
+        thread_id=thread.thread_id,
+        profile=ProfilePublic(
+            user=UserPublic(user_id=current_user.user_id, username=current_user.username),
+            avatar=profile.avatar,
+            first_name=profile.first_name,
+            last_name=profile.last_name,
+        ),
+        thread_name=thread.thread_name,
+        timestamp=thread.timestamp,
+        thread_content=thread.thread_content,
+        like=thread.like,
+    )
 
 # Define a Post route for post
 @router.post("/threads/{thread_id}/posts", response_model=PostPublic)

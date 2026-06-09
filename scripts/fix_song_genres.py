@@ -5,52 +5,21 @@ import sys
 
 from dotenv import load_dotenv
 from sqlalchemy import text
-from sqlmodel import Session, select
+from sqlmodel import select
 
 sys.path.append(os.getcwd())
 
-from model.Actor import Actor
-from model.Artist import Artist
-from model.Director import Director
-from model.Episode import Episode
-from model.Friendship import Friendship
 from model.Genre import Genre
-from model.Messages import Message
-from model.Movie import Movie
-from model.MovieActor import MovieActor
-from model.MovieDirector import MovieDirector
-from model.MovieGenre import MovieGenre
-from model.MovieWriter import MovieWriter
-from model.Post import Post
-from model.Profile import Profile
-from model.Review import Review
 from model.Song import Song
-from model.SongArtist import SongArtist
-from model.SongGenre import SongGenre
-from model.Thread import Thread
-from model.User import User
-from model.Writer import Writer
-from model.database import engine
-from model.song_genres import (
+from model.song_genre_mapping import (
     CANONICAL_SONG_GENRES,
     manual_genres_for_song,
     map_raw_genres_to_canonical,
 )
+from scripts.lib.db_helpers import get_or_create_genre, get_session
 
 
-def get_or_create_genre(session: Session, name: str) -> Genre:
-    genre = session.exec(select(Genre).where(Genre.genre_name == name)).first()
-
-    if genre:
-        return genre
-
-    genre = Genre(genre_name=name)
-    session.add(genre)
-    session.flush()
-    return genre
-
-
-def delete_orphan_genres(session: Session) -> int:
+def delete_orphan_genres(session) -> int:
     orphan_ids = session.exec(
         text(
             """
@@ -64,34 +33,29 @@ def delete_orphan_genres(session: Session) -> int:
     ).all()
 
     deleted = 0
-
     for row in orphan_ids:
         genre = session.get(Genre, row[0])
-
         if genre:
             session.delete(genre)
             deleted += 1
-
     return deleted
 
 
 def fix_song_genres() -> None:
     load_dotenv()
-
     updated_songs = 0
     songs_without_genres = 0
 
-    with Session(engine) as session:
+    with get_session() as session:
         songs = session.exec(select(Song)).all()
 
         for song in songs:
             session.refresh(song, attribute_names=["genres"])
-
             current_names = {genre.genre_name for genre in song.genres}
             canonical_names = map_raw_genres_to_canonical(current_names)
 
             if not canonical_names:
-                canonical_names = manual_genres_for_song(song.song_name)
+                canonical_names = manual_genres_for_song(song.title)
 
             if not canonical_names:
                 song.genres = []
@@ -115,7 +79,7 @@ def fix_song_genres() -> None:
 
 
 def print_summary() -> None:
-    with Session(engine) as conn:
+    with get_session() as conn:
         rows = conn.exec(
             text(
                 """
@@ -131,7 +95,6 @@ def print_summary() -> None:
     print("\nSong genres after cleanup:")
     for genre_name, song_count in rows:
         print(f"  {song_count:3d}  {genre_name}")
-
     print(f"\nTotal song genres in use: {len(rows)}")
 
 

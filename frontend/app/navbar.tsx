@@ -12,9 +12,15 @@ import {
 } from "@/components/ui/navigation-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { useEffect, useState } from "react";
-import axios from "axios";
+import Image from "next/image";
+import { Suspense, useEffect, useState } from "react";
 import api from "@/app/apiClient";
+import { useAuth } from "@/app/providers/AuthProvider";
+import {
+  MEDIA_CONFIG,
+  type Media,
+  type PaginatedResponse,
+} from "@/lib/types/media";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from "@/components/ui/item";
 import Link from "next/link";
@@ -44,65 +50,18 @@ const menu = [
   }
 ]
 
-interface User {
-  userId: number;
-  username: string;
-  firstName: string;
-  lastName: string;
-  avatar: string;
-}
-
-// Define TypeScript type for Search Movies object returned by API
-type Movie = {
-  movieId: number;
-  movieName: string;
-  year: number;
-  length: string;
-  cover: string;
-  movieRating: number;
-  movieRatingCount: number;
-}
-
-// Define TypeScript type for Search Shows object returned by API
-type Show = {
-  showId: number;
-  showName: string;
-  year: number;
-  length: string;
-  cover: string;
-  showRating: number;
-  showRatingCount: number;
-}
-
-// Define TypeScript type for Search Songs object returned by API
-type Song = {
-  songId: number;
-  songName: string;
-  year: number;
-  length: string;
-  cover: string;
-  songRating: number;
-  songRatingCount: number;
-}
-
-export default function Navbar() {
+function NavbarContent() {
   // State to hold the search open
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
 
   // State to hold the search text
   const [searchText, setSearchText] = useState<string>("");
 
-  // State to hold the fetched Search Movies 
-  const [movies, setMovies] = useState<Movie[]>([]);
+  const [movies, setMovies] = useState<Media[]>([]);
+  const [shows, setShows] = useState<Media[]>([]);
+  const [songs, setSongs] = useState<Media[]>([]);
 
-  // State to hold the fetched Search Shows
-  const [shows, setShows] = useState<Show[]>([]);
-
-  // State to hold the fetched Search Songs
-  const [songs, setSongs] = useState<Song[]>([]);
-
-  // State to hold the user
-  const [user, setUser] = useState<User | null>(null);
+  const { user, logout: authLogout } = useAuth();
 
   // States to preserve the user's previous page
   const pathname = usePathname();
@@ -110,114 +69,51 @@ export default function Navbar() {
   const currentUrl =
     pathname + (searchParams.toString() ? `?${searchParams.toString()}` : "");
 
-  useEffect(() => {
-    fetchUser();
-  }, []);
-  // Get current logged in information
-  async function fetchUser() {
-    const token = localStorage.getItem("accessToken");
-    const refreshToken = localStorage.getItem("refreshToken");
+  function logout() {
+    authLogout();
+  }
 
-    if (!token && !refreshToken) {
-      setUser(null);
+  useEffect(() => {
+    if (searchText.length === 0) {
+      setMovies([]);
+      setShows([]);
+      setSongs([]);
       return;
     }
 
-    try {
-      const response = await api.get("/current_user");
-      setUser(response.data);
-    } catch (error: any) {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
-      setUser(null);
-      console.error(error);
-    }
-  }
+    const timer = setTimeout(() => {
+      void Promise.all([searchMovies(), searchShows(), searchSongs()]);
+    }, 280);
 
-  // check if user is logged in (local storage will store access token)
-  function isUserLoggedIn() {
-    const accessToken = localStorage.getItem("accessToken");
-    if (accessToken != null && accessToken != "") {
-      return true;
-    }
-    return false;
-  }
-
-  function logout() {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    setUser(null);
-  }
-
-  useEffect(() => {
-    if (searchText.length > 0) {
-      searchMovies();
-      searchShows();
-      searchSongs();
-    }
+    return () => clearTimeout(timer);
   }, [searchText]);
 
-  // Async function to fetch Search Movies from API
+  async function searchMedia(endpoint: string, setter: (items: Media[]) => void) {
+    try {
+      const response = await api.get<PaginatedResponse<Media>>(endpoint, {
+        headers: { Accept: "application/json" },
+        params: {
+          page: 1,
+          size: 8,
+          search_text: searchText !== "" ? searchText : undefined,
+        },
+      });
+      setter(response.data.items);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
   async function searchMovies() {
-    try {
-      // Send a GET resquest to the search movies endpoint using the id from the URL
-      const response = await axios.get("http://localhost:8000/movies", {
-        headers: {
-          "Accept": 'application/json'
-        },
-        params: {
-          page: 1,      // Request the first page of result
-          size: 8,     // Limit results to 8 search movies
-          search_text: searchText !== "" ? searchText : undefined
-        }
-      });
-      // Get the item array from the Search Movies responses and store it in state
-      setMovies(response.data.items as Movie[]);
-    } catch (error) {
-      console.error(error);
-    }
+    await searchMedia(MEDIA_CONFIG.movie.api, setMovies);
   }
 
-  // Async function to fetch Search Shows from API
   async function searchShows() {
-    try {
-      // Send a GET resquest to the search shows endpoint using the id from the URL
-      const response = await axios.get("http://localhost:8000/shows", {
-        headers: {
-          "Accept": 'application/json'
-        },
-        params: {
-          page: 1,      // Request the first page of result
-          size: 8,     // Limit results to 8 search shows
-          search_text: searchText !== "" ? searchText : undefined,
-        }
-      });
-      // Get the item array from the Search Shows responses and store it in state
-      setShows(response.data.items as Show[]);
-    } catch (error) {
-      console.error(error);
-    }
+    await searchMedia(MEDIA_CONFIG.tv.api, setShows);
   }
 
-  // Async function to fetch Search Songs from API
   async function searchSongs() {
-    try {
-      // Send a GET resquest to the search songs endpoint using the id from the URL
-      const response = await axios.get("http://localhost:8000/songs", {
-        headers: {
-          "Accept": 'application/json'
-        },
-        params: {
-          page: 1,      // Request the first page of result
-          size: 8,     // Limit results to 8 search songs
-          search_text: searchText !== "" ? searchText : undefined,
-        }
-      });
-      // Get the item array from the Search Songs responses and store it in state
-      setSongs(response.data.items as Song[]);
-    } catch (error) {
-      console.error(error);
-    }
+    await searchMedia(MEDIA_CONFIG.song.api, setSongs);
   }
 
   return (
@@ -258,45 +154,48 @@ export default function Navbar() {
               </PopoverTrigger>
               <PopoverContent className="w-100 max-h-150 overflow-y-auto"
                 onOpenAutoFocus={(e) => e.preventDefault()}>
-                {movies.map(movie => (
-                  <Item key={movie.movieId}>
-
+                {movies.map((movie) => (
+                  <Item key={movie.id}>
                     <ItemMedia variant="icon">
-                      <img src={movie.cover} alt={movie.movieName} />
+                      {movie.cover ? (
+                        <Image src={movie.cover} alt={movie.title} width={40} height={40} className="object-cover" />
+                      ) : null}
                     </ItemMedia>
                     <ItemContent>
-                      <Link href={"/movies/" + movie.movieId}>
-                        <ItemTitle>{movie.movieName}</ItemTitle>
+                      <Link href={`${MEDIA_CONFIG.movie.route}/${movie.id}`}>
+                        <ItemTitle>{movie.title}</ItemTitle>
                         <ItemDescription>{movie.year}</ItemDescription>
                       </Link>
                     </ItemContent>
                   </Item>
                 ))}
 
-                {shows.map(show => (
-                  <Item key={show.showId}>
-
+                {shows.map((show) => (
+                  <Item key={show.id}>
                     <ItemMedia variant="icon">
-                      <img src={show.cover} alt={show.showName} />
+                      {show.cover ? (
+                        <Image src={show.cover} alt={show.title} width={40} height={40} className="object-cover" />
+                      ) : null}
                     </ItemMedia>
                     <ItemContent>
-                      <Link href={"/tvshows/" + show.showId}>
-                        <ItemTitle>{show.showName}</ItemTitle>
+                      <Link href={`${MEDIA_CONFIG.tv.route}/${show.id}`}>
+                        <ItemTitle>{show.title}</ItemTitle>
                         <ItemDescription>{show.year}</ItemDescription>
                       </Link>
                     </ItemContent>
                   </Item>
                 ))}
 
-                {songs.map(song => (
-                  <Item key={song.songId}>
-
+                {songs.map((song) => (
+                  <Item key={song.id}>
                     <ItemMedia variant="icon">
-                      <img src={song.cover} alt={song.songName} />
+                      {song.cover ? (
+                        <Image src={song.cover} alt={song.title} width={40} height={40} className="object-cover" />
+                      ) : null}
                     </ItemMedia>
                     <ItemContent>
-                      <Link href={"/songs/" + song.songId}>
-                        <ItemTitle>{song.songName}</ItemTitle>
+                      <Link href={`${MEDIA_CONFIG.song.route}/${song.id}`}>
+                        <ItemTitle>{song.title}</ItemTitle>
                         <ItemDescription>{song.year}</ItemDescription>
                       </Link>
                     </ItemContent>
@@ -428,4 +327,12 @@ export default function Navbar() {
       </div>
     </section>
   );
-};
+}
+
+export default function Navbar() {
+  return (
+    <Suspense fallback={null}>
+      <NavbarContent />
+    </Suspense>
+  );
+}

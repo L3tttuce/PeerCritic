@@ -176,9 +176,7 @@ export function useFriends() {
   }, [friendsMode, userSearchQuery]);
 
   useEffect(() => {
-    fetchFriends();
-    fetchReceivedRequests();
-    fetchSentRequests();
+    void Promise.all([fetchFriends(), fetchReceivedRequests(), fetchSentRequests()]);
   }, []);
 
   const tabCounts = useMemo(

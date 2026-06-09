@@ -1,7 +1,7 @@
 from typing import Annotated
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import select
 
 from model.database import SessionDep
@@ -9,10 +9,9 @@ from model.Friendship import Friendship
 from model.User import User
 from model.Profile import Profile
 from router.Authentication import get_current_user
-
-
-def canonical_pair(a: int, b: int) -> tuple[int, int]:
-    return (a, b) if a < b else (b, a)
+from utils.friends import invalidate_friend_ids_cache
+from utils.pairs import canonical_pair
+from utils.users import user_card
 
 
 router = APIRouter(prefix="/my", tags=["friends"])
@@ -22,13 +21,18 @@ router = APIRouter(prefix="/my", tags=["friends"])
 def my_friends(
     current_user: Annotated[User, Depends(get_current_user)],
     session: SessionDep,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ):
     friendships = session.exec(
-        select(Friendship).where(
+        select(Friendship)
+        .where(
             Friendship.status == "accepted",
             (Friendship.requester_id == current_user.user_id)
             | (Friendship.addressee_id == current_user.user_id),
         )
+        .offset(offset)
+        .limit(limit)
     ).all()
 
     friend_ids: list[int] = []
@@ -48,18 +52,7 @@ def my_friends(
         .where(User.user_id.in_(friend_ids))
     ).all()
 
-    out = []
-    for u, p in rows:
-        out.append(
-            {
-                "userId": u.user_id,
-                "username": u.username,
-                "firstName": (p.first_name if p else ""),
-                "lastName": (p.last_name if p else ""),
-                "avatar": (p.avatar if p else None),
-            }
-        )
-
+    out = [user_card(u, p) for u, p in rows]
     out.sort(key=lambda x: x["username"].lower())
     return out
 
@@ -139,6 +132,8 @@ def accept_friend_request(
     session.add(fr)
     session.commit()
     session.refresh(fr)
+    invalidate_friend_ids_cache(current_user.user_id)
+    invalidate_friend_ids_cache(requester_id)
     return {"ok": True, "status": "accepted"}
 
 
@@ -193,6 +188,8 @@ def remove_friend(
 
     session.delete(fr)
     session.commit()
+    invalidate_friend_ids_cache(current_user.user_id)
+    invalidate_friend_ids_cache(other_user_id)
     return {"ok": True}
 
 
@@ -200,12 +197,17 @@ def remove_friend(
 def friend_requests_received(
     current_user: Annotated[User, Depends(get_current_user)],
     session: SessionDep,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ):
     friendships = session.exec(
-        select(Friendship).where(
+        select(Friendship)
+        .where(
             Friendship.status == "pending",
             Friendship.addressee_id == current_user.user_id,
         )
+        .offset(offset)
+        .limit(limit)
     ).all()
 
     requester_ids = [fr.requester_id for fr in friendships]
@@ -218,18 +220,7 @@ def friend_requests_received(
         .where(User.user_id.in_(requester_ids))
     ).all()
 
-    out = []
-    for u, p in rows:
-        out.append(
-            {
-                "userId": u.user_id,
-                "username": u.username,
-                "firstName": (p.first_name if p else ""),
-                "lastName": (p.last_name if p else ""),
-                "avatar": (p.avatar if p else None),
-            }
-        )
-
+    out = [user_card(u, p) for u, p in rows]
     out.sort(key=lambda x: x["username"].lower())
     return out
 
@@ -238,12 +229,17 @@ def friend_requests_received(
 def friend_requests_sent(
     current_user: Annotated[User, Depends(get_current_user)],
     session: SessionDep,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ):
     friendships = session.exec(
-        select(Friendship).where(
+        select(Friendship)
+        .where(
             Friendship.status == "pending",
             Friendship.requester_id == current_user.user_id,
         )
+        .offset(offset)
+        .limit(limit)
     ).all()
 
     addressee_ids = [fr.addressee_id for fr in friendships]
@@ -256,18 +252,7 @@ def friend_requests_sent(
         .where(User.user_id.in_(addressee_ids))
     ).all()
 
-    out = []
-    for u, p in rows:
-        out.append(
-            {
-                "userId": u.user_id,
-                "username": u.username,
-                "firstName": (p.first_name if p else ""),
-                "lastName": (p.last_name if p else ""),
-                "avatar": (p.avatar if p else None),
-            }
-        )
-
+    out = [user_card(u, p) for u, p in rows]
     out.sort(key=lambda x: x["username"].lower())
     return out
 

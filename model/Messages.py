@@ -3,11 +3,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlmodel import SQLModel, Field
+from sqlmodel import Field
 from sqlalchemy import Index, UniqueConstraint, CheckConstraint
 
+from model.BaseTable import BaseTable
 
-class Conversation(SQLModel, table=True):
+
+class Conversation(BaseTable, table=True):
     __tablename__ = "conversation"
 
     conversation_id: Optional[int] = Field(default=None, primary_key=True)
@@ -54,7 +56,7 @@ class Conversation(SQLModel, table=True):
     )
 
 
-class ConversationMember(SQLModel, table=True):
+class ConversationMember(BaseTable, table=True):
     __tablename__ = "conversationmember"
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -67,7 +69,7 @@ class ConversationMember(SQLModel, table=True):
     left_datetime: Optional[datetime] = Field(default=None, index=True)
 
     last_read_message_id: Optional[int] = Field(
-        default=None, foreign_key="message.message_id"
+        default=None, foreign_key="message.message_id", index=True
     )
     unread_count: int = Field(default=0, index=True)
 
@@ -79,7 +81,7 @@ class ConversationMember(SQLModel, table=True):
     )
 
 
-class Message(SQLModel, table=True):
+class Message(BaseTable, table=True):
     __tablename__ = "message"
 
     message_id: Optional[int] = Field(default=None, primary_key=True)
@@ -98,19 +100,19 @@ class Message(SQLModel, table=True):
 
     shared_movie_id: Optional[int] = Field(
         default=None,
-        foreign_key="movie.movie_id",
+        foreign_key="movie.id",
         index=True,
     )
 
     shared_song_id: Optional[int] = Field(
         default=None,
-        foreign_key="song.song_id",
+        foreign_key="song.id",
         index=True,
     )
 
     shared_tvshow_id: Optional[int] = Field(
         default=None,
-        foreign_key="tvshow.show_id",
+        foreign_key="tvshow.id",
         index=True,
     )
 

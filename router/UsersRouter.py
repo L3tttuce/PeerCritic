@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import select
 
 from model.database import SessionDep
@@ -15,6 +15,8 @@ from model.TVShow import TVShow
 from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 from model.Friendship import Friendship
+from utils.reviews import review_to_my_out
+from utils.users import user_card
 
 router = APIRouter(tags=["users"])
 
@@ -23,6 +25,8 @@ router = APIRouter(tags=["users"])
 def get_user_reviews(
     user_id: int,
     session: SessionDep,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ):
     stmt = (
         select(Review)
@@ -33,59 +37,16 @@ def get_user_reviews(
             selectinload(Review.tvshow),
         )
         .order_by(Review.review_id.desc())
+        .offset(offset)
+        .limit(limit)
     )
 
     reviews = session.exec(stmt).all()
-
     out = []
-
     for r in reviews:
-        if r.tvshow_id is not None and r.tvshow is not None:
-            out.append(
-                {
-                    "reviewId": r.review_id,
-                    "review": r.review,
-                    "reviewRating": r.review_rating,
-                    "reviewRatingCount": r.review_rating_count,
-                    "kind": "tv",
-                    "title": r.tvshow.show_name,
-                    "cover": r.tvshow.cover,
-                    "movieId": None,
-                    "songId": None,
-                    "showId": r.tvshow_id,
-                }
-            )
-        elif r.movie_id is not None and r.movie is not None:
-            out.append(
-                {
-                    "reviewId": r.review_id,
-                    "review": r.review,
-                    "reviewRating": r.review_rating,
-                    "reviewRatingCount": r.review_rating_count,
-                    "kind": "movie",
-                    "title": r.movie.movie_name,
-                    "cover": r.movie.cover,
-                    "movieId": r.movie_id,
-                    "songId": None,
-                    "showId": None,
-                }
-            )
-        elif r.song_id is not None and r.song is not None:
-            out.append(
-                {
-                    "reviewId": r.review_id,
-                    "review": r.review,
-                    "reviewRating": r.review_rating,
-                    "reviewRatingCount": r.review_rating_count,
-                    "kind": "song",
-                    "title": r.song.song_name,
-                    "cover": r.song.cover,
-                    "movieId": None,
-                    "songId": r.song_id,
-                    "showId": None,
-                }
-            )
-
+        item = review_to_my_out(r)
+        if item:
+            out.append(item.model_dump())
     return out
 
 
@@ -146,15 +107,7 @@ def search_users(
         if u.user_id == current_user.user_id:
             continue
 
-        out.append(
-            {
-                "userId": u.user_id,
-                "username": u.username,
-                "firstName": (p.first_name if p else ""),
-                "lastName": (p.last_name if p else ""),
-                "avatar": (p.avatar if p else None),
-            }
-        )
+        out.append(user_card(u, p))
 
     out.sort(key=lambda x: (x["username"].lower() != q.lower(), x["username"].lower()))
     return out

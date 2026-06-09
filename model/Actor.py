@@ -9,13 +9,12 @@ if TYPE_CHECKING:
     from model.Movie import Movie
     from model.TVShow import TVShow
 
-from model.MovieActor import MovieActor
-from model.TVShowActor import TVShowActor
+from model.links import MovieActor, TVShowActor
 
 # Create Actor database table
 class Actor(BaseTable, table=True): 
     actor_id: int | None = Field(default=None, primary_key=True)    # create id
-    actor_name: str                                                 # required field
+    actor_name: str = Field(index=True)
     
     movies: list["Movie"] = Relationship(back_populates="actors", link_model=MovieActor)
     shows: list["TVShow"] = Relationship(back_populates="actors", link_model=TVShowActor)

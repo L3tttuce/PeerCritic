@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import axios from "axios";
+import Image from "next/image";
+import { memo, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Star } from "lucide-react";
 import { motion } from "framer-motion";
@@ -20,54 +20,16 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { api } from "@/app/apiClient";
+import {
+  GENRE_API_PATH,
+  MEDIA_CONFIG,
+  type Genre,
+  type Media,
+  type MediaType,
+  type PaginatedResponse,
+} from "@/lib/types/media";
 
-// Define TypeScript type for Genre object returned by API
-type Genre = {
-  genreId: number | null;
-  genreName: string;
-};
-
-// Define TypeScript type for Movie card object returned by API
-type MovieCard = {
-  movieId: number | null;
-  movieName: string;
-  description: string | null;
-  year: number | null;
-  length: string | null;
-  cover: string | null;
-  backDrop: string | null;
-  movieRating: number | null;
-  movieRatingCount: number | null;
-};
-
-// Define TypeScript type for TV Show card object returned by API
-type TVShowCard = {
-  showId: number | null;
-  showName: string;
-  description: string | null;
-  year: number | null;
-  length: string | null;
-  cover: string | null;
-  backDrop: string | null;
-  showRating: number | null;
-  showRatingCount: number | null;
-};
-
-// Define TypeScript type for Song card object returned by API
-type SongCard = {
-  songId: number | null;
-  songName: string;
-  year: number | null;
-  length: string | null;
-  cover: string | null;
-  songRating: number | null;
-  songRatingCount: number | null;
-};
-
-// Define allowed media section types
-type MediaType = "movies" | "shows" | "songs";
-
-// Define normalized media item shape used by the UI
 type MediaItem = {
   id: number | null;
   title: string;
@@ -78,32 +40,23 @@ type MediaItem = {
   href: string;
 };
 
-// Define paginated response shape returned by API
-type PaginatedResponse<T> = {
-  items: T[];
-};
-
-// Define paginated response shape returned by API
-type MediaSectionConfig<T> = {
+type MediaSectionConfig = {
   type: MediaType;
   title: string;
   seeMoreHref: string;
   itemsEndpoint: string;
   genresEndpoint: string;
-  mapItem: (item: T) => MediaItem;
 };
 
-// Define configuration type for each media section
-type MediaCarouselSectionProps<T> = {
-  config: MediaSectionConfig<T>;
+type MediaCarouselSectionProps = {
+  config: MediaSectionConfig;
 };
 
-// Define props for reusable media carousel section
-const API_BASE_URL = "http://localhost:8000";
-
-// Helper function to fetch paginated data from API
-async function fetchPage<T>(endpoint: string, params?: Record<string, string | number | undefined>) {
-  const response = await axios.get<PaginatedResponse<T>>(`${API_BASE_URL}${endpoint}`, {
+async function fetchPage<T>(
+  endpoint: string,
+  params?: Record<string, string | number | undefined>
+) {
+  const response = await api.get<PaginatedResponse<T>>(endpoint, {
     headers: { Accept: "application/json" },
     params,
   });
@@ -111,37 +64,78 @@ async function fetchPage<T>(endpoint: string, params?: Record<string, string | n
   return response.data.items;
 }
 
-// Helper function to derive display duration for TV show cards
-function getShowDuration(show: TVShowCard): string | undefined {
-  return show.length ?? undefined;
+function mapMediaToItem(item: Media, href: string): MediaItem {
+  return {
+    id: item.id,
+    title: item.title,
+    year: item.year ?? undefined,
+    duration: item.length ?? undefined,
+    cover: item.cover ?? "/placeholder.png",
+    rating: item.rating ?? undefined,
+    href,
+  };
 }
 
-// Reusable component for a homepage media carousel section
-function MediaCarouselSection<T>({ config }: MediaCarouselSectionProps<T>) {
-  // State to hold fetched media items
+const CarouselCard = memo(function CarouselCard({ item }: { item: MediaItem }) {
+  return (
+    <Link href={item.href} className="block select-none">
+      <div className="relative transition-transform duration-200 hover:scale-[1.05] hover:z-10">
+        <Card className="bg-orange-200 border-orange-400 border rounded-lg pt-0 h-full">
+          <div className="relative w-full aspect-[2/3] overflow-hidden rounded-t-lg border-b border-orange-400">
+            {item.cover ? (
+              <Image
+                src={item.cover}
+                alt={item.title}
+                fill
+                sizes="(max-width: 768px) 33vw, 14vw"
+                draggable={false}
+                className="object-cover rounded-t-lg"
+              />
+            ) : null}
+          </div>
+
+          <CardHeader>
+            <CardTitle className="line-clamp-1">{item.title}</CardTitle>
+
+            <CardDescription className="flex flex-col gap-3 text-gray-500">
+              <div className="flex gap-3">
+                {item.year !== undefined && <span>{item.year}</span>}
+                {item.duration && <span>{item.duration}</span>}
+              </div>
+              {typeof item.rating === "number" && (
+                <div className="flex items-center gap-1">
+                  <Star className="h-4 w-4" fill="#F3B413" color="#F3B413" />
+                  <span className="font-bold text-gray-500">{item.rating}</span>
+                </div>
+              )}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    </Link>
+  );
+});
+
+const MediaCarouselSection = memo(function MediaCarouselSection({ config }: MediaCarouselSectionProps) {
   const [items, setItems] = useState<MediaItem[]>([]);
-
-  // State to hold fetched media items
   const [genres, setGenres] = useState<Genre[]>([]);
-
-  // State to hold the currently selected genre
   const [selectedGenre, setSelectedGenre] = useState("");
-
-  // State to hold the currently selected genre
   const [isLoading, setIsLoading] = useState(true);
 
-  // Async function to fetch media items based on selected genre
   async function loadItems(genre = "") {
     try {
       setIsLoading(true);
 
-      const fetchedItems = await fetchPage<T>(config.itemsEndpoint, {
+      const fetchedItems = await fetchPage<Media>(config.itemsEndpoint, {
         page: 1,
         size: 16,
         search_genre: genre || undefined,
       });
 
-      setItems(fetchedItems.map(config.mapItem));
+      const route = MEDIA_CONFIG[config.type].route;
+      setItems(
+        fetchedItems.map((item) => mapMediaToItem(item, `${route}/${item.id}`))
+      );
     } catch (error) {
       console.error(`Error fetching ${config.title.toLowerCase()}:`, error);
       setItems([]);
@@ -150,14 +144,12 @@ function MediaCarouselSection<T>({ config }: MediaCarouselSectionProps<T>) {
     }
   }
 
-  // Handle genre selection and refetch matching items
   function handleGenreSelect(genre: string) {
     const nextGenre = selectedGenre === genre ? "" : genre;
     setSelectedGenre(nextGenre);
     void loadItems(nextGenre);
   }
 
-  // Fetch genres and initial media items on page load
   useEffect(() => {
     async function loadSectionData() {
       try {
@@ -165,11 +157,14 @@ function MediaCarouselSection<T>({ config }: MediaCarouselSectionProps<T>) {
 
         const [fetchedGenres, fetchedItems] = await Promise.all([
           fetchPage<Genre>(config.genresEndpoint, { page: 1, size: 99 }),
-          fetchPage<T>(config.itemsEndpoint, { page: 1, size: 16 }),
+          fetchPage<Media>(config.itemsEndpoint, { page: 1, size: 16 }),
         ]);
 
+        const route = MEDIA_CONFIG[config.type].route;
         setGenres(fetchedGenres);
-        setItems(fetchedItems.map(config.mapItem));
+        setItems(
+          fetchedItems.map((item) => mapMediaToItem(item, `${route}/${item.id}`))
+        );
       } catch (error) {
         console.error(`Error loading ${config.title.toLowerCase()} section:`, error);
         setItems([]);
@@ -182,7 +177,6 @@ function MediaCarouselSection<T>({ config }: MediaCarouselSectionProps<T>) {
   }, [config]);
 
   return (
-    //Header
     <div className="mx-12">
       <div className="flex items-center justify-between px-2 py-4">
         <h2 className="text-black text-3xl font-bold">{config.title}</h2>
@@ -196,7 +190,6 @@ function MediaCarouselSection<T>({ config }: MediaCarouselSectionProps<T>) {
         </Link>
       </div>
 
-      {/*Genre Carousel*/}
       <div className="relative py-2">
         <Carousel
           opts={{ align: "start", dragFree: true, loop: true }}
@@ -254,7 +247,6 @@ function MediaCarouselSection<T>({ config }: MediaCarouselSectionProps<T>) {
         </Carousel>
       </div>
 
-      {/*Media Carousel*/}
       <div className="mt-4 relative py-4 px-12">
         <Carousel
           key={`${config.type}-${selectedGenre || "all"}-${isLoading ? "loading" : "ready"}`}
@@ -285,10 +277,7 @@ function MediaCarouselSection<T>({ config }: MediaCarouselSectionProps<T>) {
                 </CarouselItem>
               ))
             ) : items.length === 0 ? (
-              <CarouselItem
-                key={`empty-${selectedGenre || "all"}`}
-                className="basis-full py-4"
-              >
+              <CarouselItem key={`empty-${selectedGenre || "all"}`} className="basis-full py-4">
                 <motion.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -301,7 +290,7 @@ function MediaCarouselSection<T>({ config }: MediaCarouselSectionProps<T>) {
             ) : (
               items.map((item, index) => (
                 <CarouselItem
-                  key={`${config.type}-${selectedGenre || "all"}-${item.id ?? "no-id"}-${index}`}
+                  key={`${config.type}-${selectedGenre || "all"}-${item.id}`}
                   className="basis-1/3 md:basis-1/5 lg:basis-1/6 xl:basis-1/7 py-4"
                 >
                   <motion.div
@@ -314,37 +303,7 @@ function MediaCarouselSection<T>({ config }: MediaCarouselSectionProps<T>) {
                     }}
                     className="px-2"
                   >
-                    <Link href={item.href} className="block select-none">
-                      <div className="relative transition-transform duration-200 hover:scale-[1.05] hover:z-10">
-                        <Card className="bg-orange-200 border-orange-400 border rounded-lg pt-0 h-full">
-                          <div className="w-full aspect-[2/3] overflow-hidden rounded-t-lg border-b border-orange-400">
-                            <img
-                              src={item.cover}
-                              alt={item.title}
-                              draggable={false}
-                              className="w-full h-full object-cover rounded-t-lg"
-                            />
-                          </div>
-
-                          <CardHeader>
-                            <CardTitle className="line-clamp-1">{item.title}</CardTitle>
-
-                            <CardDescription className="flex flex-col gap-3 text-gray-500">
-                              <div className="flex gap-3">
-                                {item.year !== undefined && <span>{item.year}</span>}
-                                {item.duration && <span>{item.duration}</span>}
-                              </div>
-                              {typeof item.rating === "number" && (
-                                <div className="flex items-center gap-1">
-                                  <Star className="h-4 w-4" fill="#F3B413" color="#F3B413" />
-                                  <span className="font-bold text-gray-500">{item.rating}</span>
-                                </div>
-                              )}
-                            </CardDescription>
-                          </CardHeader>
-                        </Card>
-                      </div>
-                    </Link>
+                    <CarouselCard item={item} />
                   </motion.div>
                 </CarouselItem>
               ))
@@ -357,60 +316,30 @@ function MediaCarouselSection<T>({ config }: MediaCarouselSectionProps<T>) {
       </div>
     </div>
   );
-}
+});
 
-// Config object for Movies section
-const movieSection: MediaSectionConfig<MovieCard> = {
-  type: "movies",
-  title: "Movies",
-  seeMoreHref: "/movies",
-  itemsEndpoint: "/movies",
-  genresEndpoint: "/genres/movies",
-  mapItem: (movie) => ({
-    id: movie.movieId,
-    title: movie.movieName,
-    year: movie.year ?? undefined,
-    duration: movie.length ?? undefined,
-    cover: movie.cover ?? "/placeholder.png",
-    rating: movie.movieRating ?? undefined,
-    href: `/movies/${movie.movieId}`,
-  }),
+const movieSection: MediaSectionConfig = {
+  type: "movie",
+  title: MEDIA_CONFIG.movie.label,
+  seeMoreHref: MEDIA_CONFIG.movie.route,
+  itemsEndpoint: MEDIA_CONFIG.movie.api,
+  genresEndpoint: GENRE_API_PATH.movie,
 };
 
-// Config object for TV Shows section
-const showSection: MediaSectionConfig<TVShowCard> = {
-  type: "shows",
-  title: "TV Shows",
-  seeMoreHref: "/tvshows",
-  itemsEndpoint: "/shows",
-  genresEndpoint: "/genres/shows",
-  mapItem: (show) => ({
-    id: show.showId,
-    title: show.showName,
-    year: show.year ?? undefined,
-    duration: getShowDuration(show),
-    cover: show.cover ?? "/placeholder.png",
-    rating: show.showRating ?? undefined,
-    href: `/tvshows/${show.showId}`,
-  }),
+const showSection: MediaSectionConfig = {
+  type: "tv",
+  title: MEDIA_CONFIG.tv.label,
+  seeMoreHref: MEDIA_CONFIG.tv.route,
+  itemsEndpoint: MEDIA_CONFIG.tv.api,
+  genresEndpoint: GENRE_API_PATH.tv,
 };
 
-// Config object for Songs section
-const songSection: MediaSectionConfig<SongCard> = {
-  type: "songs",
-  title: "Songs",
-  seeMoreHref: "/songs",
-  itemsEndpoint: "/songs",
-  genresEndpoint: "/genres/songs",
-  mapItem: (song) => ({
-    id: song.songId,
-    title: song.songName,
-    year: song.year ?? undefined,
-    duration: song.length ?? undefined,
-    cover: song.cover ?? "/placeholder.png",
-    rating: song.songRating ?? undefined,
-    href: `/songs/${song.songId}`,
-  }),
+const songSection: MediaSectionConfig = {
+  type: "song",
+  title: MEDIA_CONFIG.song.label,
+  seeMoreHref: MEDIA_CONFIG.song.route,
+  itemsEndpoint: MEDIA_CONFIG.song.api,
+  genresEndpoint: GENRE_API_PATH.song,
 };
 
 export default function HomePageCarousels() {

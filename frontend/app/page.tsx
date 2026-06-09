@@ -2,7 +2,8 @@
 
 import Navbar from "@/app/navbar";
 import { useEffect, useState } from "react";
-import axios from "axios";
+import api from "@/app/apiClient";
+import type { MediaDetail } from "@/lib/types/media";
 import {
   Carousel,
   CarouselContent,
@@ -13,21 +14,11 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import HomePageMovies from "@/app/home-page-carousels";
 import Autoplay from "embla-carousel-autoplay";
+import Image from "next/image";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Define TypeScript type for Search Movies object returned by API
-type Movie = {
-  movieId: number;
-  movieName: string;
-  description: string;
-  year: number;
-  length: string;
-  cover: string;
-  backDrop: string;
-  movieRating: number;
-  movieRatingCount: number;
-}
+type HeroMovie = MediaDetail & { description: string; backDrop: string };
 
 // Helper function
 function HeroBannerSkeleton() {
@@ -50,7 +41,7 @@ function HeroBannerSkeleton() {
 export default function Home() {
 
   // State to hold the fetched Search Movies 
-  const [movies, setMovies] = useState<Movie[]>([]);
+  const [movies, setMovies] = useState<HeroMovie[]>([]);
 
   // State to determine loading
   const [isLoading, setIsLoading] = useState(true);
@@ -61,18 +52,10 @@ export default function Home() {
     try {
       setIsLoading(true);
       // Send a GET resquest to the search movies endpoint using the id from the URL
-      const response = await axios.get("http://localhost:8000/movies", {
-        headers: {
-          Accept: "application/json",
-        },
-        params: {
-          page: 1,      // Request the first page of result
-          size: 8,     // Limit results to 8 search movies
-          search_text: "",
-        },
+      const response = await api.get("/movies", {
+        params: { page: 1, size: 8, search_text: "" },
       });
-      // Get the item array from the Search Movies responses and store it in state
-      setMovies(response.data.items as Movie[]);
+      setMovies(response.data.items as HeroMovie[]);
     } catch (error) {
       console.error(error);
       setMovies([]);
@@ -124,26 +107,30 @@ export default function Home() {
                 className="mx-full relative"
               >
                 <CarouselContent>
-                  {movies.map((movie, index) => (
-                    <CarouselItem key={`${movie.movieId}-${index}`}>
+                  {movies.map((movie) => (
+                    <CarouselItem key={movie.id}>
                       <motion.div
                         initial={{ opacity: 0.85 }}
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.3, ease: "easeOut" }}
                       >
                         <Card className="py-0">
-                          <CardContent className="relative flex h-130 items-center justify-center px-0 py-0">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              className="w-full aspect-21/9"
-                              src={movie.backDrop}
-                              alt={movie.movieName}
-                            />
+                          <CardContent className="relative flex h-130 items-center justify-center overflow-hidden px-0 py-0">
+                            {movie.backDrop ? (
+                              <Image
+                                src={movie.backDrop}
+                                alt={movie.title}
+                                fill
+                                sizes="100vw"
+                                className="object-cover"
+                                priority
+                              />
+                            ) : null}
 
                             <div className="absolute top-1/2 left-0 h-full w-200"></div>
 
                             <Link
-                              href={`/movies/${movie.movieId}`}
+                              href={`/movies/${movie.id}`}
                               className="absolute bottom-0 left-0 flex w-200"
                             >
                               <motion.div
@@ -153,7 +140,7 @@ export default function Home() {
                                 className="flex flex-col gap-2 bg-gray-600/40 p-4 backdrop-blur-[2px]"
                               >
                                 <h1 className="text-4xl font-bold text-white">
-                                  {movie.movieName}
+                                  {movie.title}
                                 </h1>
                                 <h3 className="text-lg italic font-semibold text-white">
                                   {movie.description}

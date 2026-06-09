@@ -5,14 +5,14 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { AvatarDropDown, DEFAULT_AVATARS } from "@/components/ui/avatarDropDown";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import axios from 'axios';
+import { Suspense, useState } from "react";
+import api from "@/app/apiClient";
+import { notifyAuthChanged } from "@/app/authEvents";
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from "next/image";
 import Link from "next/link";
 
-// Default export - the main component rendered at the /signup route
-export default function Page() {
+function SignupForm() {
   // Create useState
   const [firstName, setFirstName] = useState("");     //stores the value typed into the first name input field, starts as empty string
   const [lastName, setLastName] = useState("");
@@ -58,7 +58,7 @@ export default function Page() {
     try {
       setIsCreatingAccount(true);
       // Send a POST request to the backend /signup endpoint with all form data as a JSON body
-      const response = await axios.post("http://localhost:8000/signup", {
+      const response = await api.post("/signup", {
         username,
         password,
         firstName,
@@ -67,9 +67,8 @@ export default function Page() {
       });
       // Save the access token returned by the server into localStorage.
       localStorage.setItem("accessToken", response.data.access_token);
-
       localStorage.setItem("refreshToken", response.data.refresh_token);
-      // Navigate the user to the home page after successful signup
+      notifyAuthChanged();
       setRecoveryCode(response.data.recovery_code);
     } catch (error: any) {
       console.error(error);
@@ -289,4 +288,12 @@ export default function Page() {
       </div>
     </div>
   )
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="flex min-h-svh items-center justify-center">Loading...</div>}>
+      <SignupForm />
+    </Suspense>
+  );
 }

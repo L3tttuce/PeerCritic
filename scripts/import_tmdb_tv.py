@@ -2,73 +2,26 @@
 
 import os
 import sys
-from datetime import datetime
 
-import requests
-from dotenv import load_dotenv
-from sqlmodel import Session, select
+from sqlmodel import select
 
 sys.path.append(os.getcwd())
 
-from model.database import engine
-
-from model.Actor import Actor
-from model.Director import Director
-from model.Episode import Episode
-from model.Genre import Genre
 from model.TVShow import TVShow
-from model.Writer import Writer
-
-
-TMDB_BASE_URL = "https://api.themoviedb.org/3"
-TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
-TMDB_BACKDROP_BASE_URL = "https://image.tmdb.org/t/p/w1280"
-
-
-def tmdb_headers():
-    load_dotenv()
-    token = os.getenv("TMDB_ACCESS_TOKEN")
-
-    if not token:
-        raise RuntimeError("TMDB_ACCESS_TOKEN is not set in .env")
-
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json",
-    }
-
-
-def tmdb_get(path: str, params: dict | None = None):
-    response = requests.get(
-        f"{TMDB_BASE_URL}{path}",
-        headers=tmdb_headers(),
-        params=params or {},
-        timeout=15,
-    )
-    response.raise_for_status()
-    return response.json()
-
-
-def year_from_date(date_value: str | None) -> int | None:
-    if not date_value:
-        return None
-
-    try:
-        return datetime.strptime(date_value, "%Y-%m-%d").year
-    except ValueError:
-        return None
-
-
-def poster_url(path: str | None) -> str | None:
-    if not path:
-        return None
-    return f"{TMDB_IMAGE_BASE_URL}{path}"
-
-
-def backdrop_url(path: str | None) -> str | None:
-    if not path:
-        return None
-    return f"{TMDB_BACKDROP_BASE_URL}{path}"
+from scripts.lib.db_helpers import (
+    get_or_create_actor,
+    get_or_create_director,
+    get_or_create_genre,
+    get_or_create_writer,
+    get_session,
+)
+from scripts.lib.tmdb import (
+    backdrop_url,
+    get_trailer_video,
+    poster_url,
+    tmdb_get,
+    year_from_date,
+)
 
 
 def search_tv(query: str):
@@ -84,125 +37,26 @@ def get_tv_credits(tmdb_id: int):
     return tmdb_get(f"/tv/{tmdb_id}/credits")
 
 
-def get_tv_video(tmdb_id: int):
-    data = tmdb_get(f"/tv/{tmdb_id}/videos")
-
-    for v in data.get("results", []):
-        if v.get("type") == "Trailer" and v.get("site") == "YouTube":
-            return f"https://www.youtube.com/embed/{v['key']}"
-
-    return None
-
-
-def get_season_details(tmdb_id: int, season_number: int):
-    return tmdb_get(f"/tv/{tmdb_id}/season/{season_number}")
-
-
-def get_or_create_genre(session: Session, name: str) -> Genre:
-    genre = session.exec(select(Genre).where(Genre.genre_name == name)).first()
-
-    if genre:
-        return genre
-
-    genre = Genre(genre_name=name)
-    session.add(genre)
-    session.flush()
-    return genre
-
-
-def get_or_create_actor(session: Session, name: str) -> Actor:
-    actor = session.exec(select(Actor).where(Actor.actor_name == name)).first()
-
-    if actor:
-        return actor
-
-    actor = Actor(actor_name=name)
-    session.add(actor)
-    session.flush()
-    return actor
-
-
-def get_or_create_director(session: Session, name: str) -> Director:
-    director = session.exec(select(Director).where(Director.director_name == name)).first()
-
-    if director:
-        return director
-
-    director = Director(director_name=name)
-    session.add(director)
-    session.flush()
-    return director
-
-
-def get_or_create_writer(session: Session, name: str) -> Writer:
-    writer = session.exec(select(Writer).where(Writer.writer_name == name)).first()
-
-    if writer:
-        return writer
-
-    writer = Writer(writer_name=name)
-    session.add(writer)
-    session.flush()
-    return writer
-
-
-def upsert_episode(
-    session: Session,
-    show: TVShow,
-    episode_name: str,
-    season_number: int | None,
-    episode_number: int | None,
-):
-    existing_episode = session.exec(
-        select(Episode).where(
-            Episode.show_id == show.show_id,
-            Episode.season == season_number,
-            Episode.episode_number == episode_number,
-        )
-    ).first()
-
-    if existing_episode:
-        existing_episode.episode_name = episode_name
-        return existing_episode
-
-    episode = Episode(
-        episode_name=episode_name,
-        season=season_number,
-        episode_number=episode_number,
-        show_id=show.show_id,
-    )
-    session.add(episode)
-    return episode
-
-
 def upsert_tv_show(details: dict):
     tmdb_id = details["id"]
-
-    tv_name = details.get("name") or details.get("original_name") or "Untitled"
+    title = details.get("name") or details.get("original_name") or "Untitled"
     year = year_from_date(details.get("first_air_date"))
 
-    episode_run_times = details.get("episode_run_time") or []
-    runtime = episode_run_times[0] if episode_run_times else None
-    length = f"{runtime} min" if runtime else None
-
-    video_url = get_tv_video(tmdb_id)
+    video_url = get_trailer_video(tmdb_id, "tv")
     credits = get_tv_credits(tmdb_id)
 
-    with Session(engine) as session:
+    with get_session() as session:
         existing_show = session.exec(
-            select(TVShow).where(
-                TVShow.show_name == tv_name,
-                TVShow.year == year,
-            )
+            select(TVShow).where(TVShow.title == title, TVShow.year == year)
         ).first()
 
         if existing_show:
             show = existing_show
             action = "Updated"
         else:
-            show = TVShow(show_name=tv_name)
-            show.show_rating = 0
-            show.show_rating_count = 0
+            show = TVShow(title=title)
+            show.rating = 0
+            show.rating_count = 0
             action = "Created"
 
         session.add(show)
@@ -210,93 +64,52 @@ def upsert_tv_show(details: dict):
 
         show.description = details.get("overview")
         show.year = year
-        show.length = length
         show.cover = poster_url(details.get("poster_path"))
         show.back_drop = backdrop_url(details.get("backdrop_path"))
         show.video = video_url
+        show.episode_count = details.get("number_of_episodes") or 0
+        show.season_count = details.get("number_of_seasons") or 0
 
         show.genres = [
             get_or_create_genre(session, g["name"])
             for g in details.get("genres", [])
             if g.get("name")
         ]
-
         show.actors = [
             get_or_create_actor(session, c["name"])
             for c in credits.get("cast", [])[:10]
             if c.get("name")
         ]
 
-        creator_names = [
-            c["name"]
-            for c in details.get("created_by", [])
-            if c.get("name")
-        ]
-
+        creator_names = [c["name"] for c in details.get("created_by", []) if c.get("name")]
         director_names = {
             c["name"]
             for c in credits.get("crew", [])
             if c.get("job") == "Director" and c.get("name")
         }
-
         writer_names = {
             c["name"]
             for c in credits.get("crew", [])
-            if c.get("job") in ["Writer", "Screenplay", "Story", "Teleplay"]
-            and c.get("name")
+            if c.get("job") in ["Writer", "Screenplay", "Story", "Teleplay"] and c.get("name")
         }
-
         for name in creator_names:
             writer_names.add(name)
 
-        show.directors = [
-            get_or_create_director(session, name)
-            for name in sorted(director_names)
-        ]
-
-        show.writers = [
-            get_or_create_writer(session, name)
-            for name in sorted(writer_names)
-        ]
+        show.directors = [get_or_create_director(session, name) for name in sorted(director_names)]
+        show.writers = [get_or_create_writer(session, name) for name in sorted(writer_names)]
 
         session.add(show)
-        session.flush()
-
-        seasons = details.get("seasons", [])
-        episode_count = 0
-
-        for season in seasons:
-            season_number = season.get("season_number")
-
-            if season_number is None or season_number == 0:
-                continue
-
-            season_details = get_season_details(tmdb_id, season_number)
-
-            for ep in season_details.get("episodes", []):
-                episode_name = ep.get("name") or f"Episode {ep.get('episode_number')}"
-                episode_number = ep.get("episode_number")
-
-                upsert_episode(
-                    session=session,
-                    show=show,
-                    episode_name=episode_name,
-                    season_number=season_number,
-                    episode_number=episode_number,
-                )
-
-                episode_count += 1
-
         session.commit()
         session.refresh(show)
 
         print(f"\n{action} TV show:")
-        print(f"  ID: {show.show_id}")
-        print(f"  Title: {show.show_name}")
+        print(f"  ID: {show.id}")
+        print(f"  Title: {show.title}")
         print(f"  Year: {show.year}")
         print(f"  TMDB ID: {tmdb_id}")
         print(f"  Video: {show.video}")
-        print(f"  Episodes imported/updated: {episode_count}")
+        print(f"  Seasons: {show.season_count}")
+        print(f"  Episodes: {show.episode_count}")
 
 
 def main():
@@ -312,9 +125,7 @@ def main():
         return
 
     selected = results[0]
-
     print(f'Auto-selected: {selected.get("name")} ({selected.get("first_air_date", "Unknown date")})')
-
     details = get_tv_details(selected["id"])
     upsert_tv_show(details)
 

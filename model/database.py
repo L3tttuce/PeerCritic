@@ -13,12 +13,14 @@ engine = create_engine(
     postgresql_url,
     pool_size=10,
     max_overflow=20,
+    pool_pre_ping=True,
+    pool_recycle=3600,
 )
 
-# Create tables in the database
+# Create tables in the database (dev only; production uses Alembic migrations)
 def create_db_and_tables():
-    # SQLModel.metadata.drop_all(engine)
-    SQLModel.metadata.create_all(engine)
+    if os.getenv("CREATE_TABLES_ON_STARTUP", "").lower() in ("1", "true", "yes"):
+        SQLModel.metadata.create_all(engine)
 
 # Open database connection
 def get_session():

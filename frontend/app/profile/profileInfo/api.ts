@@ -1,19 +1,8 @@
-import axios from "axios";
+import api from "@/app/apiClient";
 import type { UserProfile, UserProfileUpdate } from "./types";
 
-function authHeaders() {
-  return {
-    Authorization: "Bearer " + localStorage.getItem("accessToken"),
-    Accept: "application/json",
-  };
-}
-
-// Fetch the current (logged in) user's profile.
 export async function fetchCurrentUserProfile(): Promise<UserProfile> {
-  const res = await axios.get("http://localhost:8000/current_user", {
-    headers: authHeaders(),
-  });
-
+  const res = await api.get("/current_user");
   const u = res.data;
   return {
     userId: u.user_id ?? u.userId,
@@ -25,12 +14,11 @@ export async function fetchCurrentUserProfile(): Promise<UserProfile> {
   };
 }
 
-// Update profile with the user's changes.
-export async function updateUserProfile(userId: number, payload: UserProfileUpdate): Promise<UserProfile> {
-  const res = await axios.put(`http://localhost:8000/users/${userId}`, payload, {
-    headers: authHeaders(),
-  });
-
+export async function updateUserProfile(
+  userId: number,
+  payload: UserProfileUpdate
+): Promise<UserProfile> {
+  const res = await api.put(`/users/${userId}`, payload);
   const u = res.data;
   return {
     userId: u.user_id ?? u.userId,
@@ -43,13 +31,6 @@ export async function updateUserProfile(userId: number, payload: UserProfileUpda
 }
 
 export async function generateRecoveryCode(): Promise<string> {
-  const res = await axios.post(
-    "http://localhost:8000/recovery-code",
-    {},
-    {
-      headers: authHeaders(),
-    }
-  );
-
+  const res = await api.post("/recovery-code", {});
   return res.data.recovery_code;
 }

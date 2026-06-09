@@ -5,7 +5,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import axios from "axios";
+import api from "@/app/apiClient";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -37,7 +37,7 @@ export default function Page() {
     }
 
     try {
-      await axios.post("http://localhost:8000/forgot-password", {
+      await api.post("/forgot-password", {
         username,
         recovery_code: recoveryCode,
         new_password: newPassword,

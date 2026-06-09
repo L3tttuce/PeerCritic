@@ -13,7 +13,6 @@ from starlette_admin.exceptions import FormValidationError, LoginFailed
 from model.Actor import Actor
 from model.Artist import Artist
 from model.Director import Director
-from model.Episode import Episode
 from model.Genre import Genre
 from model.Movie import Movie
 from model.Post import Post
@@ -22,10 +21,7 @@ from model.Review import Review
 from model.Song import Song
 from model.Thread import Thread
 from model.TVShow import TVShow
-from model.TVShowActor import TVShowActor
-from model.TVShowDirector import TVShowDirector
-from model.TVShowGenre import TVShowGenre
-from model.TVShowWriter import TVShowWriter
+from model.links import TVShowActor, TVShowDirector, TVShowGenre, TVShowWriter
 from model.User import User
 from model.Writer import Writer
 from model.database import engine
@@ -134,8 +130,6 @@ admin.add_view(ModelView(Writer))
 admin.add_view(ModelView(Actor))
 # Register the Genre model in the admin dashboard
 admin.add_view(ModelView(Genre))
-# Register the Episode model in the admin dashboard
-admin.add_view(ModelView(Episode))
 # Register the Movie model in the admin dashboard
 admin.add_view(ModelView(Movie))
 # Register the TVShow model in the admin dashboard

@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
 import { Star, X } from "lucide-react";
 import { motion } from "framer-motion";
+import { api } from "@/app/apiClient";
+import { buildReviewEndpoint } from "@/lib/reviewEndpoints";
+import type { MediaType } from "@/lib/types/media";
 
-// Define allowed media types for posting reviews
-type MediaType = "movie" | "show" | "song";
-
-// Define props for the ReviewForm component
 type ReviewFormProps = {
   mediaType: MediaType;
   mediaId: number;
@@ -18,25 +16,8 @@ type ReviewFormProps = {
   onSuccess?: () => void;
 };
 
-// Define base API URL
-const API_BASE_URL = "http://localhost:8000";
-
 const MAX_REVIEW_CHARS = 1500;
 
-// Helper function to return the correct review submission endpoint
-function getEndpoint(mediaType: MediaType, mediaId: number) {
-  if (mediaType === "song") {
-    return `${API_BASE_URL}/my/reviews/song/${mediaId}`;
-  }
-
-  if (mediaType === "show") {
-    return `${API_BASE_URL}/my/reviews/show/${mediaId}`;
-  }
-
-  return `${API_BASE_URL}/my/reviews/movie/${mediaId}`;
-}
-
-// Export review form component rendered inside review modal
 export default function ReviewForm({
   mediaType,
   mediaId,
@@ -45,27 +26,15 @@ export default function ReviewForm({
   onClose,
   onSuccess,
 }: ReviewFormProps) {
-  // State to store selected rating
   const [rating, setRating] = useState<number>(0);
-
-  // State to store written review text
   const [review, setReview] = useState("");
-
-  // State to track submit loading state
   const [submitting, setSubmitting] = useState(false);
-
-  // State to store submission error message
   const [error, setError] = useState("");
-
-  // State key used to retrigger sparkle animation
   const [sparkleKey, setSparkleKey] = useState(0);
-
   const [sparkleRating, setSparkleRating] = useState(0);
 
   const reviewCharCount = review.length;
-
   const isReviewTooLong = reviewCharCount > MAX_REVIEW_CHARS;
-
   const reviewHasContent = review.trim().length > 0;
 
   function triggerSparkles(finalRating: number) {
@@ -75,10 +44,11 @@ export default function ReviewForm({
     }
   }
 
-  // Memoized endpoint for current media item
-  const endpoint = useMemo(() => getEndpoint(mediaType, mediaId), [mediaType, mediaId]);
+  const endpoint = useMemo(
+    () => buildReviewEndpoint("my", mediaType, mediaId),
+    [mediaType, mediaId]
+  );
 
-  // Reset form state whenever modal opens for a new media item
   useEffect(() => {
     if (open) {
       setRating(0);
@@ -90,7 +60,6 @@ export default function ReviewForm({
     }
   }, [open, mediaId, mediaType]);
 
-  // Close modal when Escape key is pressed
   useEffect(() => {
     if (!open) return;
 
@@ -104,10 +73,8 @@ export default function ReviewForm({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
-  // Do not render modal when closed
   if (!open) return null;
 
-  // Submit review form to API
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -136,7 +103,7 @@ export default function ReviewForm({
       setSubmitting(true);
       setError("");
 
-      await axios.post(
+      await api.post(
         endpoint,
         {
           review: review.trim() || null,
@@ -145,7 +112,6 @@ export default function ReviewForm({
         {
           headers: {
             Accept: "application/json",
-            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -160,13 +126,11 @@ export default function ReviewForm({
     }
   }
 
-  // Determine sparkle count based on selected rating
   const sparkleCount =
     sparkleRating >= 9 ? 8 :
       sparkleRating >= 7 ? 6 :
         sparkleRating >= 4 ? 5 : 4;
 
-  // Determine sparkle travel distance based on selected rating
   const sparkleDistance =
     sparkleRating >= 9 ? 30 :
       sparkleRating >= 7 ? 24 :
@@ -181,7 +145,6 @@ export default function ReviewForm({
         className="w-full max-w-lg rounded-xl border border-orange-300 bg-orange-50 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal header */}
         <div className="flex items-center justify-between border-b border-orange-200 px-5 py-4">
           <div>
             <div className="text-lg font-bold text-gray-900">Write a Review</div>
@@ -204,7 +167,6 @@ export default function ReviewForm({
               Your Rating
             </label>
 
-            {/* Slider rating picker */}
             <div className="rounded-xl border border-orange-200 bg-orange-100/70 p-4">
               <div className="mb-4 flex items-center justify-center gap-3">
                 <div className="relative flex h-14 w-14 items-center justify-center">
@@ -255,7 +217,6 @@ export default function ReviewForm({
                     />
                   </motion.div>
 
-                  {/* Sparkles */}
                   <motion.div
                     key={sparkleKey}
                     className="pointer-events-none absolute inset-0"
@@ -292,7 +253,6 @@ export default function ReviewForm({
                   </motion.div>
                 </div>
 
-                {/* Number display */}
                 <motion.div
                   key={rating}
                   initial={{ scale: 0.94, opacity: 0.7, y: 4 }}
@@ -313,7 +273,6 @@ export default function ReviewForm({
                 <span className="text-sm font-medium text-gray-600">/10</span>
               </div>
 
-              {/* Slider */}
               <input
                 type="range"
                 min={0}
@@ -336,7 +295,6 @@ export default function ReviewForm({
                 <span>0</span>
                 <span>10</span>
               </div>
-
             </div>
           </div>
 
@@ -345,20 +303,14 @@ export default function ReviewForm({
               Review
             </label>
 
-            {/* Review text input */}
             <textarea
               maxLength={MAX_REVIEW_CHARS}
-
               value={review}
               onChange={(e) => {
                 const value = e.target.value;
-
                 const cleaned = value
-                  // remove leading whitespace
                   .replace(/^\s+/, "")
-                  // collapse multiple spaces
                   .replace(/[ ]{2,}/g, " ")
-                  // collapse 3+ newlines into 2 (max one blank line)
                   .replace(/\n{3,}/g, "\n\n");
 
                 setReview(cleaned);
@@ -368,21 +320,20 @@ export default function ReviewForm({
               className="w-full rounded-lg border border-orange-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-orange-400"
             />
             <div
-              className={`mt-1 text-right text-xs ${isReviewTooLong ? "text-red-600" : "text-gray-500"
-                }`}
+              className={`mt-1 text-right text-xs ${
+                isReviewTooLong ? "text-red-600" : "text-gray-500"
+              }`}
             >
               {reviewCharCount}/{MAX_REVIEW_CHARS} characters
             </div>
           </div>
 
-          {/* Error message */}
           {error && (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
             </div>
           )}
 
-          {/* Form action buttons */}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"

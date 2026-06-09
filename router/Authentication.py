@@ -13,6 +13,7 @@ from fastapi_another_jwt_auth import AuthJWT
 from fastapi_another_jwt_auth.exceptions import AuthJWTException
 from pwdlib import PasswordHash
 from pydantic import BaseModel
+from sqlalchemy.orm import selectinload
 from sqlmodel import select
 from starlette import status
 
@@ -27,8 +28,11 @@ SECRET_KEY = os.getenv(
     "SECRET_KEY"
 )  # The secret string used to sign JWT tokens - must be kept private
 ACCESS_TOKEN_EXPIRE_MINUTES = os.getenv(
-    "ACCESS_TOKEN_EXPIRE_MINUTES"
-)  # How long tokens are valid, read as a string
+    "ACCESS_TOKEN_EXPIRE_MINUTES", "480"
+)  # How long access tokens are valid, read as a string
+REFRESH_TOKEN_EXPIRE_DAYS = os.getenv(
+    "REFRESH_TOKEN_EXPIRE_DAYS", "30"
+)  # How long refresh tokens are valid
 
 
 # Setting for authentication
@@ -37,6 +41,9 @@ class Settings(BaseModel):
     authjwt_access_token_expire: int = (
         int(ACCESS_TOKEN_EXPIRE_MINUTES) * 60
     )  # expire in seconds
+    authjwt_refresh_token_expires: int = (
+        int(REFRESH_TOKEN_EXPIRE_DAYS) * 24 * 60 * 60
+    )  # refresh token lifetime in seconds
 
 
 # Register get_config as the configuration provider for the AuthJWT library.
@@ -90,7 +97,11 @@ def get_password_hash(password):
 
 # Queries the database for a User row where the username matches
 def get_user(username: str, session: SessionDep) -> User | None:
-    return session.exec(select(User).where(User.username == username)).first()
+    return session.exec(
+        select(User)
+        .where(User.username == username)
+        .options(selectinload(User.profile))
+    ).first()
 
 
 # Combines get user and verify password into a single authentication check
@@ -195,10 +206,8 @@ async def signup(user_create: UserCreate, session: SessionDep) -> SignupResponse
     )
 
     session.add(user)
-    session.commit()
-    session.refresh(user)
+    session.flush()
 
-    # Create the associated Profile record for the new user
     profile = Profile(
         first_name=user_create.first_name,
         last_name=user_create.last_name,

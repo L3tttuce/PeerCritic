@@ -4,8 +4,10 @@ from datetime import datetime, timezone
 from typing import Optional
 from enum import Enum
 
-from sqlmodel import SQLModel, Field
+from sqlmodel import Field
 from sqlalchemy import UniqueConstraint, Index
+
+from model.BaseTable import BaseTable
 
 
 class FriendStatus(str, Enum):
@@ -15,7 +17,7 @@ class FriendStatus(str, Enum):
     blocked = "blocked"
 
 
-class Friendship(SQLModel, table=True):
+class Friendship(BaseTable, table=True):
     __tablename__ = "friendship"
 
     id: Optional[int] = Field(default=None, primary_key=True)

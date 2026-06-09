@@ -18,7 +18,7 @@ class Profile(BaseTable, table=True):
     avatar: str | None = Field(nullable=True)                       # Optional field
     
     # Create foreign key
-    user_id: int | None = Field(default=None, foreign_key="user.user_id")
+    user_id: int | None = Field(default=None, foreign_key="user.user_id", index=True, unique=True)
     # Create one-to-one relationship between Profile and User
     user: User | None = Relationship()
     
